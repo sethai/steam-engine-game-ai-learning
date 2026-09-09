@@ -1,0 +1,11 @@
+# OS / editor junk
+.DS_Store
+.vscode/
+*.swp
+
+# Node (in case tooling gets added later)
+node_modules/
+npm-debug.log*
+
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json
