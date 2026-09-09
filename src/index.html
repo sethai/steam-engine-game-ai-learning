@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Steam Engine Survival</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="panel-header">
+        <h1>Steam Engine Survival</h1>
+        <p class="clock">Survived: <span id="elapsed">0.0</span>s</p>
+      </header>
+
+      <!-- Gauges. ui.js fills in the value text, the bar width, and danger
+           styling each frame. Markup here is just the skeleton. -->
+      <section class="gauges">
+        <div class="gauge" id="gauge-pressure">
+          <div class="gauge-label">
+            <span class="gauge-name">Pressure</span>
+            <span class="gauge-value">0.0 bar</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+          <p class="stall-warning" id="stall-warning" hidden>STALL WARNING — pressure very low</p>
+        </div>
+
+        <div class="gauge" id="gauge-temperature">
+          <div class="gauge-label">
+            <span class="gauge-name">Temperature</span>
+            <span class="gauge-value">0 &deg;C</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+        </div>
+
+        <div class="gauge" id="gauge-boilerWater">
+          <div class="gauge-label">
+            <span class="gauge-name">Boiler water</span>
+            <span class="gauge-value">0%</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+        </div>
+
+        <div class="gauge" id="gauge-fire">
+          <div class="gauge-label">
+            <span class="gauge-name">Fire</span>
+            <span class="gauge-value">0</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+        </div>
+
+        <div class="gauge" id="gauge-waterSupply">
+          <div class="gauge-label">
+            <span class="gauge-name">Water supply</span>
+            <span class="gauge-value">0</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+        </div>
+
+        <div class="gauge" id="gauge-coalSupply">
+          <div class="gauge-label">
+            <span class="gauge-name">Coal supply</span>
+            <span class="gauge-value">0</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <button type="button" id="add-water-btn">
+          Add water <kbd>W</kbd> <span class="cooldown" id="water-cooldown"></span>
+        </button>
+        <button type="button" id="add-coal-btn">
+          Add coal <kbd>C</kbd> <span class="cooldown" id="coal-cooldown"></span>
+        </button>
+      </section>
+
+      <p class="hint">
+        Keep the machine alive. Pressure past the top explodes; temperature past
+        the top melts down; running out of both supplies stalls you out.
+      </p>
+    </main>
+
+    <!-- Death screen overlay. Hidden until the run ends. -->
+    <div class="death-screen" id="death-screen" hidden>
+      <div class="death-card">
+        <h2 id="death-cause">Game over</h2>
+        <p id="death-detail"></p>
+        <button type="button" id="restart-btn">Run it again</button>
+      </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

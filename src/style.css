@@ -1,0 +1,233 @@
+/* style.css — layout and gauge styling for Steam Engine Survival.
+   Gauges are plain DOM bars (no canvas in v1); see docs/GAME_DESIGN.md
+   "Rendering decision". ui.js toggles the .warn / .danger classes on a gauge
+   based on the current value. */
+
+:root {
+  --bg: #1c1a17;
+  --panel: #2a2621;
+  --ink: #f0e9dd;
+  --ink-dim: #b7ab97;
+  --track: #14120f;
+  --ok: #6fae5f;
+  --warn: #d9a441;
+  --danger: #d05a3e;
+  --brass: #c9a25a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The `hidden` attribute must win even over rules that set `display` (e.g.
+   .death-screen below uses display:flex). Without this the death overlay would
+   never hide. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.panel {
+  width: min(520px, 92vw);
+  background: var(--panel);
+  border: 2px solid var(--brass);
+  border-radius: 10px;
+  padding: 20px 22px 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.panel-header h1 {
+  font-size: 1.15rem;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.clock {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+.clock #elapsed {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- Gauges --------------------------------------------------------------- */
+
+.gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gauge-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.gauge-name {
+  color: var(--ink-dim);
+}
+
+.gauge-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.gauge-track {
+  height: 16px;
+  background: var(--track);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--ok);
+  border-radius: 8px;
+  transition: width 120ms linear, background-color 200ms linear;
+}
+
+/* Danger banding, driven by ui.js. */
+.gauge.warn .gauge-fill {
+  background: var(--warn);
+}
+
+.gauge.danger .gauge-fill {
+  background: var(--danger);
+}
+
+.gauge.warn .gauge-value {
+  color: var(--warn);
+}
+
+.gauge.danger .gauge-value {
+  color: var(--danger);
+}
+
+.stall-warning {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--warn);
+}
+
+/* --- Controls ----------------------------------------------------------- */
+
+.controls {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0 12px;
+}
+
+.controls button {
+  flex: 1;
+  padding: 12px 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: #3c372f;
+  border: 1px solid var(--brass);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.controls button:hover:not(:disabled) {
+  background: #4a443a;
+}
+
+.controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.controls kbd {
+  font-size: 0.75rem;
+  padding: 1px 5px;
+  border: 1px solid var(--ink-dim);
+  border-radius: 4px;
+  color: var(--ink-dim);
+}
+
+.cooldown {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  font-weight: 400;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* --- Death screen ---------------------------------------------------- */
+
+.death-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 9, 7, 0.78);
+}
+
+.death-card {
+  background: var(--panel);
+  border: 2px solid var(--danger);
+  border-radius: 10px;
+  padding: 28px 32px;
+  text-align: center;
+  width: min(360px, 88vw);
+}
+
+.death-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+  color: var(--danger);
+}
+
+.death-card p {
+  margin: 0 0 20px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.death-card button {
+  padding: 10px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: #3c372f;
+  border: 1px solid var(--brass);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.death-card button:hover {
+  background: #4a443a;
+}
