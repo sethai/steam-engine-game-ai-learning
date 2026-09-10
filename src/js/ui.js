@@ -10,6 +10,16 @@ import { CONSTANTS, canAddWater, canAddCoal, canVent } from "./simulation.js";
 const MAX_MACHINE_SPEED =
   (CONSTANTS.MAX_PRESSURE - CONSTANTS.RUN_THRESHOLD) * CONSTANTS.SPEED_PER_BAR;
 
+// Engine illustration animation. The flywheel angle is driven by distance
+// travelled (so it naturally speeds up / slows / stops with machineSpeed).
+const ENGINE = {
+  WCX: 190, // flywheel centre in the SVG's user units
+  WCY: 150,
+  CRANK_R: 22, // crank-pin orbit radius
+  DEG_PER_M: 24, // wheel degrees per metre travelled
+  FIRE_FULL: 18, // fireCoal value that shows full smoke / firebox glow
+};
+
 // --- Analog arc dials (pressure, machine speed) -------------------------------
 // Geometry of the dial SVG (viewBox 0 0 120 100). The arc sweeps SWEEP degrees
 // starting at START (clockwise, SVG y-down): bottom-left -> top -> bottom-right.
@@ -183,6 +193,10 @@ const dom = {
   deathCause: document.getElementById("death-cause"),
   deathDetail: document.getElementById("death-detail"),
   restartBtn: document.getElementById("restart-btn"),
+  engineStage: document.getElementById("engine-stage"),
+  flywheel: document.getElementById("flywheel"),
+  crankPin: document.getElementById("crank-pin"),
+  connRod: document.getElementById("conn-rod"),
   dials: {},
   gauges: {},
 };
@@ -248,6 +262,8 @@ export function renderGauges(state) {
     els.container.classList.toggle("danger", level === "danger");
   }
 
+  renderEngine(state);
+
   // Stall warning: the machine isn't moving (pressure below RUN_THRESHOLD). Not
   // lethal on its own, but if it stays stopped for STALL_TIMEOUT seconds the run
   // ends — show the countdown once that timer is running.
@@ -261,6 +277,29 @@ export function renderGauges(state) {
       dom.stallWarning.textContent = "STALL WARNING — machine stopped";
     }
   }
+}
+
+// Spin the flywheel (angle from distance travelled), swing the connecting rod
+// off the crank pin, and fade the smoke + firebox glow with the fire.
+function renderEngine(state) {
+  const angle = ((state.distance * ENGINE.DEG_PER_M) % 360 + 360) % 360;
+  dom.flywheel.setAttribute(
+    "transform",
+    `rotate(${angle.toFixed(1)} ${ENGINE.WCX} ${ENGINE.WCY})`,
+  );
+
+  const rad = (angle * Math.PI) / 180;
+  const px = ENGINE.WCX + ENGINE.CRANK_R * Math.cos(rad);
+  const py = ENGINE.WCY + ENGINE.CRANK_R * Math.sin(rad);
+  dom.crankPin.setAttribute("cx", px.toFixed(1));
+  dom.crankPin.setAttribute("cy", py.toFixed(1));
+  dom.connRod.setAttribute("x2", px.toFixed(1));
+  dom.connRod.setAttribute("y2", py.toFixed(1));
+
+  const fire = state.gameOver
+    ? 0
+    : Math.min(1, state.fireCoal / ENGINE.FIRE_FULL);
+  dom.engineStage.style.setProperty("--fire", fire.toFixed(2));
 }
 
 // Update the score line and the action buttons (enabled state + cooldown text).

@@ -8,6 +8,7 @@
   </head>
   <body>
     <main class="panel">
+      <div class="console">
       <header class="panel-header">
         <h1>Steam Engine Survival</h1>
         <p class="clock">
@@ -102,6 +103,65 @@
         shed pressure fast. Temperature past the top melts it down; let the
         machine stop for too long and it stalls.
       </p>
+      </div><!-- /.console -->
+
+      <!-- Engine illustration. Static SVG; ui.js spins the flywheel (angle from
+           distance travelled), swings the connecting rod, and fades the chimney
+           smoke + firebox glow with the fire (via the --fire custom property). -->
+      <aside class="engine-stage" id="engine-stage" aria-hidden="true">
+        <svg viewBox="0 0 240 320" class="engine-svg" role="img">
+          <!-- chimney smoke (drawn first so the stack sits in front of it) -->
+          <g class="smoke">
+            <circle class="puff p1" cx="63" cy="84" r="7" />
+            <circle class="puff p2" cx="63" cy="84" r="9" />
+            <circle class="puff p3" cx="63" cy="84" r="6" />
+            <circle class="puff p4" cx="63" cy="84" r="10" />
+          </g>
+
+          <!-- ground rail + legs -->
+          <rect class="e-rail" x="8" y="300" width="224" height="12" rx="6" />
+          <rect class="e-leg" x="46" y="252" width="12" height="50" />
+          <rect class="e-leg" x="150" y="252" width="12" height="50" />
+
+          <!-- flywheel mounting bracket -->
+          <path class="e-body" d="M176 252 L176 176 L206 176 L206 252 Z" />
+
+          <!-- boiler -->
+          <rect class="e-body" x="26" y="168" width="176" height="92" rx="16" />
+          <line class="e-band" x1="92" y1="170" x2="92" y2="258" />
+          <line class="e-band" x1="140" y1="170" x2="140" y2="258" />
+          <ellipse class="e-body" cx="118" cy="168" rx="20" ry="13" />
+
+          <!-- firebox door + glow -->
+          <circle class="e-firebox" cx="50" cy="228" r="10" />
+          <circle class="firebox-glow" id="firebox-glow" cx="50" cy="228" r="7" />
+
+          <!-- chimney -->
+          <rect class="e-body" x="52" y="90" width="22" height="82" />
+          <rect class="e-body" x="45" y="82" width="36" height="12" rx="3" />
+
+          <!-- flywheel -->
+          <circle class="e-tire" cx="190" cy="150" r="44" />
+          <circle class="e-rim" cx="190" cy="150" r="34" />
+          <g class="flywheel" id="flywheel">
+            <line class="e-spoke" x1="190" y1="150" x2="190" y2="110" />
+            <line class="e-spoke" x1="190" y1="150" x2="190" y2="190" />
+            <line class="e-spoke" x1="190" y1="150" x2="150" y2="150" />
+            <line class="e-spoke" x1="190" y1="150" x2="230" y2="150" />
+            <line class="e-spoke" x1="190" y1="150" x2="162" y2="122" />
+            <line class="e-spoke" x1="190" y1="150" x2="218" y2="178" />
+            <line class="e-spoke" x1="190" y1="150" x2="162" y2="178" />
+            <line class="e-spoke" x1="190" y1="150" x2="218" y2="122" />
+          </g>
+          <circle class="e-hub" cx="190" cy="150" r="7" />
+
+          <!-- connecting rod: pivot on the boiler to the crank pin on the wheel
+               (both x2/y2 and the pin are moved by ui.js each frame) -->
+          <line class="e-rod" id="conn-rod" x1="118" y1="150" x2="212" y2="150" />
+          <circle class="e-pin" cx="118" cy="150" r="4" />
+          <circle class="e-pin" id="crank-pin" cx="212" cy="150" r="4" />
+        </svg>
+      </aside>
     </main>
 
     <!-- Death screen overlay. Hidden until the run ends. -->

@@ -32,18 +32,33 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   background: var(--bg);
   color: var(--ink);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 .panel {
-  width: min(520px, 92vw);
+  width: min(800px, 96vw);
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
   background: var(--panel);
   border: 2px solid var(--brass);
   border-radius: 10px;
   padding: 20px 22px 24px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.console {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .panel {
+    flex-direction: column;
+  }
 }
 
 .panel-header {
@@ -333,4 +348,131 @@ body {
 
 .death-card button:hover {
   background: #4a443a;
+}
+
+/* --- Engine illustration --------------------------------------------------- */
+
+.engine-stage {
+  --fire: 0; /* 0..1, set by ui.js from fireCoal — drives smoke + firebox glow */
+  flex: 0 0 236px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: var(--track);
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+}
+
+@media (max-width: 720px) {
+  .engine-stage {
+    flex-basis: auto;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+}
+
+.engine-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.e-body {
+  fill: #5f6f7a;
+  stroke: #17130e;
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.e-rail {
+  fill: var(--brass);
+  stroke: #17130e;
+  stroke-width: 3;
+}
+.e-leg {
+  fill: #4a555e;
+  stroke: #17130e;
+  stroke-width: 4;
+}
+.e-band {
+  stroke: #17130e;
+  stroke-width: 3;
+  opacity: 0.45;
+}
+.e-firebox {
+  fill: #17130e;
+}
+.firebox-glow {
+  fill: #ffb347;
+  opacity: var(--fire);
+}
+.e-tire {
+  fill: var(--panel);
+  stroke: var(--brass);
+  stroke-width: 8;
+}
+.e-rim {
+  fill: none;
+  stroke: #17130e;
+  stroke-width: 3;
+}
+.e-spoke {
+  stroke: #17130e;
+  stroke-width: 3;
+}
+.e-hub {
+  fill: var(--brass);
+  stroke: #17130e;
+  stroke-width: 3;
+}
+.e-rod {
+  stroke: var(--brass);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.e-pin {
+  fill: #17130e;
+}
+
+/* Chimney smoke: four puffs on a staggered loop. Peak opacity scales with the
+   fire, so when --fire is 0 the puffs are invisible even though the loop runs. */
+.puff {
+  fill: #c9c4b8;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: puff-rise 3.2s linear infinite;
+}
+.puff.p2 {
+  animation-delay: 0.8s;
+}
+.puff.p3 {
+  animation-delay: 1.6s;
+}
+.puff.p4 {
+  animation-delay: 2.4s;
+}
+
+@keyframes puff-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  20% {
+    opacity: calc(0.6 * var(--fire));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-10px, -76px) scale(1.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .puff {
+    animation: none;
+    opacity: calc(0.4 * var(--fire));
+  }
 }

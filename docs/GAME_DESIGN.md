@@ -442,7 +442,12 @@ bad — stall vs. wear/explosion); speed green/orange/red (only the fast end is 
 zone edges are explicit constants — `PRESSURE_SAFE_LOW/HIGH`, `SPEED_SAFE_MAX`,
 `SPEED_WARN_MAX` (plus the existing `RUN_THRESHOLD` / `REDLINE_PRESSURE` / `MAX_*`) — so a
 future machine upgrade can widen the safe band. Defaults track the pressure model.
-(Recorded per CLAUDE.md's "note the choice once made".)
+
+A stylized **engine illustration** (inline SVG, in `index.html`) sits to the right of the
+console: `ui.js` spins the flywheel (angle = `distance × DEG_PER_M`, so it speeds up and
+stops with the machine), swings a connecting rod off the crank pin, and fades chimney
+smoke + firebox glow with a `--fire` custom property set from `fireCoal`. Still
+declarative DOM, no canvas. (Recorded per CLAUDE.md's "note the choice once made".)
 
 ## Win/lose framing
 There's no "win" in v1 — it's an endless high-score loop. Score is **distance
