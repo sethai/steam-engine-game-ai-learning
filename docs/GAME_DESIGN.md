@@ -432,9 +432,14 @@ All four deaths reachable; safe play and greedy play both viable with different
 score ceilings and risk. Numbers are first-pass — expect hand-tuning.
 
 ## Rendering decision (v1)
-Gauges are **DOM + CSS bars**, not HTML5 canvas. Rationale: easier to read line-by-line
-for a learning project, and "value mapped to a fill %" ports cleanly. Canvas dials are a
-later visual pass. (Recorded here per CLAUDE.md's "note the choice once made".)
+Most readouts are **DOM + CSS bars** — easy to read line-by-line, and "value mapped to a
+fill %" ports cleanly. **Pressure and machine speed** are **inline-SVG analog arc dials**
+(built by `ui.js` from the physics constants, needle rotated per frame) — still
+declarative DOM, no canvas. Zones: pressure red/orange/**green**/orange/red (both ends
+bad — stall vs. wear/explosion); speed green/orange/red (only the fast end is bad). The
+green edges are the machine's efficient "knee" (`MAX_WORK_DRAW / WORK_DRAW_COEFF`) and
+`REDLINE_PRESSURE`, so the colours track the model. (Recorded per CLAUDE.md's "note the
+choice once made".)
 
 ## Win/lose framing
 There's no "win" in v1 — it's an endless high-score loop. Score is **distance

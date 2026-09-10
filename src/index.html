@@ -16,26 +16,24 @@
         </p>
       </header>
 
-      <!-- Gauges. ui.js fills in the value text, the bar width, and danger
+      <!-- Analog dials for the two "operating point" readouts. ui.js injects the
+           SVG (coloured zones + needle) into each .dial-svg on load, then just
+           rotates the needle each frame. -->
+      <section class="dials">
+        <figure class="dial" id="dial-pressure">
+          <div class="dial-svg"></div>
+          <figcaption>Pressure</figcaption>
+          <p class="stall-warning" id="stall-warning" hidden>STALL WARNING — machine stopped</p>
+        </figure>
+        <figure class="dial" id="dial-machineSpeed">
+          <div class="dial-svg"></div>
+          <figcaption>Machine speed</figcaption>
+        </figure>
+      </section>
+
+      <!-- Bar gauges. ui.js fills in the value text, the bar width, and danger
            styling each frame. Markup here is just the skeleton. -->
       <section class="gauges">
-        <div class="gauge" id="gauge-pressure">
-          <div class="gauge-label">
-            <span class="gauge-name">Pressure</span>
-            <span class="gauge-value">0.0 bar</span>
-          </div>
-          <div class="gauge-track"><div class="gauge-fill"></div></div>
-          <p class="stall-warning" id="stall-warning" hidden>STALL WARNING — machine stopped</p>
-        </div>
-
-        <div class="gauge" id="gauge-machineSpeed">
-          <div class="gauge-label">
-            <span class="gauge-name">Machine speed</span>
-            <span class="gauge-value">0 m/s</span>
-          </div>
-          <div class="gauge-track"><div class="gauge-fill"></div></div>
-        </div>
-
         <div class="gauge" id="gauge-wear">
           <div class="gauge-label">
             <span class="gauge-name">Wear</span>

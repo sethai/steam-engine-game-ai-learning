@@ -1,7 +1,7 @@
 /* style.css — layout and gauge styling for Steam Engine Survival.
-   Gauges are plain DOM bars (no canvas in v1); see docs/GAME_DESIGN.md
-   "Rendering decision". ui.js toggles the .warn / .danger classes on a gauge
-   based on the current value. */
+   Pressure and machine speed are analog SVG arc dials (built by ui.js); every
+   other readout is a DOM bar. ui.js toggles .warn / .danger on the bars and
+   swaps level-ok/warn/danger classes on the dial needle + number. */
 
 :root {
   --bg: #1c1a17;
@@ -79,7 +79,101 @@ body {
   font-size: 0.85rem;
 }
 
-/* --- Gauges --------------------------------------------------------------- */
+/* --- Analog dials ------------------------------------------------------- */
+
+.dials {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.dial {
+  flex: 1 1 0;
+  max-width: 210px;
+  margin: 0;
+  text-align: center;
+}
+
+.dial-face {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.dial figcaption {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+}
+
+.dial-zone {
+  stroke-linecap: butt;
+}
+.dial-zone.level-ok {
+  stroke: var(--ok);
+}
+.dial-zone.level-warn {
+  stroke: var(--warn);
+}
+.dial-zone.level-danger {
+  stroke: var(--danger);
+}
+
+/* Notches carved out of the arc at each zone boundary. */
+.dial-tick {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.dial-needle {
+  stroke: var(--ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  transition: transform 120ms linear;
+}
+.dial-needle.level-warn {
+  stroke: var(--warn);
+}
+.dial-needle.level-danger {
+  stroke: var(--danger);
+}
+
+.dial-hub {
+  fill: var(--ink);
+}
+
+.dial-num {
+  fill: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dial-num.level-warn {
+  fill: var(--warn);
+}
+.dial-num.level-danger {
+  fill: var(--danger);
+}
+
+.dial-unit {
+  fill: var(--ink-dim);
+  font-size: 7px;
+}
+
+.dial-end {
+  fill: var(--ink-dim);
+  font-size: 6px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.dial .stall-warning {
+  margin-top: 4px;
+}
+
+/* --- Bar gauges --------------------------------------------------------- */
 
 .gauges {
   display: flex;
