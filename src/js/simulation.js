@@ -23,7 +23,8 @@
 //     temperature down.
 //   - Deaths: explosion (pressure maxed), meltdown (temp maxed), breakdown
 //     (wear maxed — ran it too hard too long), stall (machine not moving for
-//     STALL_TIMEOUT seconds — ran the supplies dry, or never got it going).
+//     STALL_TIMEOUT seconds — or immediately, if it has stopped and there is
+//     nothing left to pour or burn, so recovery is impossible).
 
 // All tunable numbers live here. Rationale for each value is in
 // docs/GAME_DESIGN.md "v1 tuning constants". These are placeholders: expect to
@@ -349,6 +350,17 @@ export function step(state, dt) {
   } else if (state.stalledTime >= c.STALL_TIMEOUT) {
     // The machine sat stopped too long: never got going, or ran its supplies
     // dry and coasted to a halt.
+    state.gameOver = true;
+    state.causeOfDeath = "stall";
+  } else if (
+    state.machineSpeed <= 0 &&
+    state.fireCoal <= 0 &&
+    state.waterSupply <= 0 &&
+    state.coalSupply <= 0
+  ) {
+    // Nothing left to pour or burn, the fire is out and the machine has already
+    // stopped — the run cannot recover, so end it now instead of making the
+    // player watch the stall timeout run down.
     state.gameOver = true;
     state.causeOfDeath = "stall";
   }

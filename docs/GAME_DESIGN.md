@@ -25,9 +25,10 @@ from scratch, not a clone.
    idling a barely-alive machine earns nothing and running hot is rewarded.)
 
 Note on "stall": a brief low-pressure dip is not lethal — a "STALL WARNING" label shows
-whenever the machine isn't moving (pressure below `RUN_THRESHOLD`). Only if it stays
-stopped for `STALL_TIMEOUT` seconds does the run end. That covers both "ran the supplies
-dry and coasted to a halt" and "never got the engine going".
+whenever the machine isn't moving (pressure below `RUN_THRESHOLD`). Normally the run only
+ends if it stays stopped for `STALL_TIMEOUT` seconds. But if recovery is *impossible* —
+the machine has stopped, the fire is out, and both supplies are empty — the run ends
+right away rather than making the player watch a 30-second countdown they can't affect.
 
 Deliberately OUT of v1 scope: currency, upgrades, roguelike runs, random events,
 different fuel types, multiple machine parts. These come after the core loop is proven fun.
@@ -140,6 +141,11 @@ if pressure >= MAX_PRESSURE:          gameOver("explosion")
 if temperature >= MAX_TEMP:           gameOver("meltdown")
 if wear >= WEAR_MAX:                  gameOver("breakdown")
 if stalledTime >= STALL_TIMEOUT:      gameOver("stall")
+// ...or end the stall immediately when recovery is impossible: the machine has
+// stopped AND fireCoal == 0 AND waterSupply == 0 AND coalSupply == 0. No point
+// making the player watch the timeout run down.
+if machineSpeed <= 0 and fireCoal <= 0
+   and waterSupply <= 0 and coalSupply <= 0:  gameOver("stall")
 ```
 
 The player's manual **Vent steam** action (outside this tick loop) just does
