@@ -42,8 +42,10 @@ different fuel types, multiple machine parts. These come after the core loop is 
 | `zeroPressureTime` | seconds | Internal: how long `pressure` has been at zero. Drives the stall timeout; resets the instant pressure goes positive. |
 
 ## Player actions
-- **Add water** — moves a chunk of `waterSupply` into `boilerWater` (instant or short delay,
-  decide by feel in playtesting)
+- **Add water** — moves a chunk of `waterSupply` into `boilerWater`, and **mixes cold
+  (ambient-temperature) water into the boiler, so it also pulls `temperature` down** —
+  more so when the boiler was low (less thermal mass to buffer the shock). See "Fourth
+  pass".
 - **Add coal** — consumes a chunk of `coalSupply`, increases coal currently burning
   (coal burns down over time rather than being an instant temperature jump)
 - Both actions are rate-limited (a cooldown) so the player can't spam-correct instantly —
@@ -137,8 +139,8 @@ when the player stokes and burns down over time; heat scales with it.
 
 | Name | Value | Meaning / why |
 |---|---|---|
-| `WATER_ADD_TO_BOILER` | 18 % | ~2 adds cross the whole safe band; responsive but not a one-tap fix. |
-| `WATER_SUPPLY_COST` | 8 units | ~12 refills per run; decoupled from boiler gain (tank is "bigger" than boiler). Lowered from 10 to offset the shorter cooldown. |
+| `WATER_ADD_TO_BOILER` | 12 % | Cut from 18 in the "Fourth pass" — now that a refill also mixes cold water in and drops `temperature`, a smaller scoop keeps that shock manageable (~27–35°C mid-boiler, more when near-empty). |
+| `WATER_SUPPLY_COST` | 5 units | ~20 refills per run; cut from 8 to match the smaller scoop so total water economy is roughly unchanged. |
 | `WATER_COOLDOWN` | 1.2 s | Cut from 2.0s after hand-play — 2.0s felt like an eternity and made it hard to add enough water in time to pull the temperature back down. Still not spammable. |
 | `COAL_ADD_TO_FIRE` | 10 units | Down from 12 for finer fire control (a stoke was a big fraction of the ~14-unit equilibrium fire). |
 | `COAL_SUPPLY_COST` | 7 units | ~14 stokes per run; lowered from 9 to offset the shorter cooldown. |
@@ -289,6 +291,43 @@ you watch the gauge, fatal if you don't. Headless re-run:
 Known edge: parking the boiler below ~150°C makes too little steam to hold any
 pressure, so it bleeds to zero and you eventually stall out — "keep it warm
 enough to drive the engine" is part of the challenge.
+
+### Fourth pass — cold-water mixing (2026-09-10)
+
+Player point: adding water *should* lower the boiler temperature — you're mixing
+room-temperature water into hotter water. Until now `addWater` only changed
+`boilerWater` and `waterSupply`; temperature was untouched except via the
+heat-loss bands.
+
+`addWater` now mixes by mass (treating `boilerWater` % as ∝ mass):
+
+```
+added   = actual rise in boilerWater from the scoop
+temperature = (boilerWater_before * temperature + added * AMBIENT_TEMP)
+              / (boilerWater_before + added)
+```
+
+Ignores the boiler shell's own heat capacity and any latent-heat / flashing —
+right level of detail for v1.
+
+Effects:
+
+- A refill now costs you temperature: ~27°C into a full boiler, ~35°C mid,
+  ~80°C into a near-empty hot one (less water = less thermal mass to buffer).
+- Running the boiler **fuller** is now a real strategy — gentler refill shocks —
+  traded against the steam sweet spot (~55%) and the flood penalty (>75%).
+- The low-fuel death spiral is real: forced to top up water with little coal →
+  temperature craters → can't recover → steam stops → stall.
+
+Re-tune: `WATER_ADD_TO_BOILER` 18 → 12 and `WATER_SUPPLY_COST` 8 → 5 (smaller,
+cheaper scoops; gentler shock, similar total water). Headless re-run:
+
+| Operator | Outcome |
+|---|---|
+| idle | `starvation` at 30s ✓ |
+| spam coal / over-fire | `meltdown` at ~8s ✓ |
+| hold ~205°C, ignore the pressure gauge | `explosion` at ~40s ✓ |
+| skilled (~185°C, ease the fire before pressure passes ~10) | `starvation` at ~141s, pressure peaked ~11 bar ✓ |
 
 ## Rendering decision (v1)
 Gauges are **DOM + CSS bars**, not HTML5 canvas. Rationale: easier to read line-by-line

@@ -36,8 +36,10 @@ export const CONSTANTS = Object.freeze({
   START_FIRE_COAL: 0, // units of coal currently burning
 
   // --- Player actions -------------------------------------------------
-  WATER_ADD_TO_BOILER: 18, // % added to the boiler per "Add Water"
-  WATER_SUPPLY_COST: 8, // units drained from the tank per "Add Water"
+  WATER_ADD_TO_BOILER: 12, // % added to the boiler per "Add Water" (smaller
+  // scoop than before so the cold-water temperature shock per refill is gentler
+  // now that mixing is modelled — see addWater and GAME_DESIGN.md "Fourth pass")
+  WATER_SUPPLY_COST: 5, // units drained from the tank per "Add Water"
   // Cooldowns cut from 2.0 / 2.5s after hand-play: 2.5s felt like an eternity
   // and left the player unable to add enough water fast enough to pull the
   // temperature back down. Still long enough that you can't just spam-correct.
@@ -166,7 +168,23 @@ export function addWater(state) {
   const drawn = Math.min(c.WATER_SUPPLY_COST, state.waterSupply);
   const fraction = drawn / c.WATER_SUPPLY_COST;
   state.waterSupply -= drawn;
-  state.boilerWater = clamp(state.boilerWater + c.WATER_ADD_TO_BOILER * fraction, 0, 100);
+
+  const before = state.boilerWater;
+  state.boilerWater = clamp(before + c.WATER_ADD_TO_BOILER * fraction, 0, 100);
+  const added = state.boilerWater - before;
+
+  // Cold water mixing in pulls the boiler temperature toward ambient, weighted
+  // by how much water was already there — a fuller boiler has more thermal mass
+  // to resist the shock. Standard mixing-temperature formula, treating
+  // boilerWater % as proportional to water mass. Deliberately ignores the
+  // boiler shell's heat capacity and any latent-heat / flashing effects.
+  // See docs/GAME_DESIGN.md "Fourth pass".
+  if (added > 0) {
+    const totalWater = before + added;
+    state.temperature =
+      (before * state.temperature + added * c.AMBIENT_TEMP) / totalWater;
+  }
+
   state.waterCooldown = c.WATER_COOLDOWN;
 }
 
