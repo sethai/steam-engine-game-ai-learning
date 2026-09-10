@@ -1,29 +1,33 @@
 # Steam Engine Survival — Game Design Doc (v1 scope)
 
 ## One-line pitch
-Keep an old steam machine running as long as possible by balancing water and coal
-input against a pressure gauge that will kill you if it goes too low (stall) or
-too high (explosion).
+Drive an old steam machine as far as you can by balancing water and coal so the
+pressure stays in the machine's happy band — too low and it stalls, too high and
+it either wears out or the boiler explodes.
 
 Inspired by an old Atari 8-bit game the designer half-remembers — mechanic reconstructed
 from scratch, not a clone.
 
 ## Core loop (v1 — no meta-game yet)
 1. Player has a **water supply** and a **coal supply**, both finite, both drain as used.
-2. Player adds water and/or coal to the boiler at will (button press / keypress).
+2. Player adds water and/or coal to the boiler at will, and can **vent steam** by hand.
 3. The simulation updates every tick (physics below).
-4. Player watches four gauges: boiler water level, temperature, pressure, and remaining
-   supply of each resource.
-5. Game ends when: pressure exceeds max (explosion), temperature exceeds max (meltdown),
-   or the player runs out of both supplies AND pressure drops to zero (starvation).
-6. Score = survival time in seconds.
+4. Pressure drives **the machine**: above `RUN_THRESHOLD` it runs, faster the more
+   pressure, and running consumes pressure. `distance` travelled is the score.
+5. Player watches the gauges: pressure, machine speed, wear, temperature, boiler water,
+   fire, and the two supplies.
+6. Game ends when:
+   - pressure hits `MAX_PRESSURE` → **explosion**
+   - temperature hits `MAX_TEMP` → **meltdown**
+   - `wear` hits `WEAR_MAX` (from sustained pressure over `REDLINE_PRESSURE`) → **breakdown**
+   - the machine sits stopped for `STALL_TIMEOUT` seconds → **stall**
+7. **Score = distance travelled.** (Was survival time — changed in "Fifth pass" so
+   idling a barely-alive machine earns nothing and running hot is rewarded.)
 
-Note on "stall": the one-line pitch mentions a stall when pressure drops too low. In v1 a
-brief low-pressure dip is **feedback only** — a "STALL WARNING" label shows below
-`STALL_WARNING_PRESSURE`. But if the machine sits at *exactly zero* pressure for
-`STALL_TIMEOUT` seconds it seizes and the run ends (reported as `starvation`). That one
-rule covers both "ran the supplies dry and coasted to a stop" and "never got the engine
-lit" — see "First playtest findings" for why it was added.
+Note on "stall": a brief low-pressure dip is not lethal — a "STALL WARNING" label shows
+whenever the machine isn't moving (pressure below `RUN_THRESHOLD`). Only if it stays
+stopped for `STALL_TIMEOUT` seconds does the run end. That covers both "ran the supplies
+dry and coasted to a halt" and "never got the engine going".
 
 Deliberately OUT of v1 scope: currency, upgrades, roguelike runs, random events,
 different fuel types, multiple machine parts. These come after the core loop is proven fun.
@@ -36,10 +40,14 @@ different fuel types, multiple machine parts. These come after the core loop is 
 | `coalSupply` | 0–100 (units) | Coal left in the external bin |
 | `boilerWater` | 0–100 (%) | Water currently inside the boiler |
 | `temperature` | 0–300 (°C) | Boiler temperature |
-| `pressure` | 0–15 (bar) | Steam pressure — the main "are you alive" gauge |
+| `pressure` | 0–15 (bar) | Steam pressure — drives the machine, and the thing that can kill you three ways |
 | `fireCoal` | 0+ (units) | Coal currently burning on the fire. Rises when the player stokes, burns down at `FIRE_BURN_DOWN` per second. Heat scales with it. |
-| `elapsedTime` | seconds | Score |
-| `zeroPressureTime` | seconds | Internal: how long `pressure` has been at zero. Drives the stall timeout; resets the instant pressure goes positive. |
+| `machineSpeed` | 0+ (m/s) | Engine speed: `(pressure − RUN_THRESHOLD) × SPEED_PER_BAR`, or 0 when pressure ≤ `RUN_THRESHOLD` |
+| `distance` | 0+ (m) | Integral of `machineSpeed`. **The score.** |
+| `wear` | 0–`WEAR_MAX` | Mechanical fatigue. Climbs while `pressure > REDLINE_PRESSURE`, recovers slowly below. At `WEAR_MAX` → breakdown. |
+| `elapsedTime` | seconds | Shown as a secondary stat, no longer the score |
+| `stalledTime` | seconds | Internal: how long the machine has been stopped (`machineSpeed` = 0). Drives the stall timeout; resets the instant it moves. |
+| `ventCooldown` | seconds | Internal: time left until "Vent steam" is available again |
 
 ## Player actions
 - **Add water** — moves a chunk of `waterSupply` into `boilerWater`, and **mixes cold
@@ -48,8 +56,12 @@ different fuel types, multiple machine parts. These come after the core loop is 
   pass".
 - **Add coal** — consumes a chunk of `coalSupply`, increases coal currently burning
   (coal burns down over time rather than being an instant temperature jump)
-- Both actions are rate-limited (a cooldown) so the player can't spam-correct instantly —
-  this is what makes it a *balancing* game and not a solved reflex-check.
+- **Vent steam** — drops `pressure` by `VENT_AMOUNT` immediately. The only cost is the
+  wasted steam (the coal + water that went into it). This replaces the old *automatic*
+  safety valve — there is no auto-vent now, so runaway pressure is on the player. See
+  "Fifth pass".
+- All three actions are rate-limited (a cooldown) so the player can't spam-correct
+  instantly — this is what makes it a *balancing* game and not a solved reflex-check.
 
 ## Physics model (first pass — expect to tune by playtesting)
 
@@ -90,21 +102,48 @@ temperature = clamp(temperature, AMBIENT_TEMP, MAX_TEMP)
 //                                   boiler boils poorly.
 steamRate = STEAM_MAX_RATE * steamCurve(temperature) * waterAvailabilityCurve(boilerWater)
 
-pressure += (steamRate - VENT_RATE - LEAKAGE) * deltaTime
+// Pressure: steam in, minus the constant leak, minus the work the engine does.
+// The engine's draw rises steeply with pressure up to its efficient throughput
+// (MAX_WORK_DRAW, the "knee" at overRun = MAX_WORK_DRAW / WORK_DRAW_COEFF),
+// then keeps rising on a shallow slope — so an overpressured boiler can be held
+// in the redline band for a while (wearing) rather than instantly exploding.
+// There is NO automatic vent; the only constant bleed is LEAKAGE.
+overRun    = max(0, pressure - RUN_THRESHOLD)
+kneeOverRun = MAX_WORK_DRAW / WORK_DRAW_COEFF
+workDraw   = overRun <= kneeOverRun
+             ? overRun * WORK_DRAW_COEFF
+             : MAX_WORK_DRAW + (overRun - kneeOverRun) * WORK_DRAW_COEFF_HIGH
+pressure += (steamRate - LEAKAGE - workDraw) * deltaTime
 pressure = clamp(pressure, 0, MAX_PRESSURE)
 
 // boilerWater is consumed by steam production
 boilerWater -= steamRate * WATER_CONSUMPTION_RATE * deltaTime
 
-// Track how long the machine has been fully dead
-if pressure <= 0: zeroPressureTime += deltaTime
-else:             zeroPressureTime = 0
+// The machine: speed follows pressure, distance (the score) is its integral
+machineSpeed = pressure > RUN_THRESHOLD
+               ? (pressure - RUN_THRESHOLD) * SPEED_PER_BAR
+               : 0
+distance += machineSpeed * deltaTime
+
+// Wear builds above the redline, recovers slowly below it
+if pressure > REDLINE_PRESSURE:
+    wear += (pressure - REDLINE_PRESSURE) * WEAR_RATE * deltaTime
+else:
+    wear = max(0, wear - WEAR_RECOVERY * deltaTime)
+
+// Track how long the machine has been stopped
+if machineSpeed <= 0: stalledTime += deltaTime
+else:                 stalledTime = 0
 
 // End conditions
-if pressure >= MAX_PRESSURE:        gameOver("explosion")
-if temperature >= MAX_TEMP:         gameOver("meltdown")
-if zeroPressureTime >= STALL_TIMEOUT: gameOver("starvation")
+if pressure >= MAX_PRESSURE:          gameOver("explosion")
+if temperature >= MAX_TEMP:           gameOver("meltdown")
+if wear >= WEAR_MAX:                  gameOver("breakdown")
+if stalledTime >= STALL_TIMEOUT:      gameOver("stall")
 ```
+
+The player's manual **Vent steam** action (outside this tick loop) just does
+`pressure = max(0, pressure - VENT_AMOUNT)` and starts `ventCooldown`.
 
 The **water** factor is bell-shaped (low at both extremes, peak in a safe band) — that's
 the "too little OR too much water is bad" tension. The **temperature** factor was
@@ -116,9 +155,11 @@ tuning, not design — expect to playtest and adjust.
 ## v1 tuning constants (first pass — all placeholders)
 
 These live in one exported `CONSTANTS` object in `src/js/simulation.js`. Tuning = editing
-that block. Target feel: a careless player dies in ~10–15s; an attentive player lasts
-~90–150s before supplies force a starvation spiral. `VENT_RATE` and `STEAM_MAX_RATE` are
-the first knobs to touch if pressure feels wrong.
+that block. Target feel (as of the Fifth pass): a careless player dies in ~10–20s; a
+safe "cruise + vent" run lasts ~150s and ~1300 m before supplies run out; a greedy
+"ride the redline" run scores higher (~1600–2000 m) but breaks the machine at ~60–100s.
+`WORK_DRAW_COEFF_HIGH`, `WEAR_RATE` and `STEAM_MAX_RATE` are the knobs to touch if the
+pressure / wear / explosion balance feels wrong.
 
 `fireCoal` below = units of coal currently burning (distinct from `coalSupply`). It rises
 when the player stokes and burns down over time; heat scales with it.
@@ -167,12 +208,26 @@ when the player stokes and burns down over time; heat scales with it.
 |---|---|---|
 | `STEAM_TEMP_MIN` / `STEAM_TEMP_FULL` | 80 / 260 °C | `steamCurve(T)`: 0 at/below 80°C, an ease-out ramp `1-(1-t)^2` to 1 at 260°C, held at 1 above. Replaced the old temperature bell (see "Third pass"). Ease-out (not linear) so pressure starts building near ~150°C with a mid boiler while steam still isn't maxed until ~260°C. |
 | `WATER_STEAM_PEAK` / `WATER_STEAM_WIDTH` | 55 / 38 % | `waterAvailabilityCurve(bw) = exp(-((bw-55)/38)^2)`; widened from 30 after hand-play. Running the boiler toward ~30% (or flooding it) is a secondary lever for *bleeding* pressure. |
-| `STEAM_MAX_RATE` | 2.5 bar/s | Rate when temperature is full and the water curve = 1.0. |
-| `VENT_RATE` | 1.5 bar/s | Constant safety valve. Wandered 1.5 → 2.0 → 1.6 → 1.2 → 1.7 → 1.5 across passes. With the ease-out steam curve: pressure is break-even around ~152°C (mid boiler), builds ~+0.6 bar/s at 200°C, ~+0.9 bar/s on the plateau. Bleed by letting the fire ease so temperature sags below ~150°C, or run the boiler lean/flooded. Still the first knob to tune. |
-| `LEAKAGE` | 0.1 bar/s | Small constant loss. Could later scale with pressure; kept constant for v1 readability. |
-| `WATER_CONSUMPTION_RATE` | 1.2 | `boilerWater -= steamRate * 1.2 * dt` → ~−3 %/s at peak steam; an 18% add lasts ~6s of hard steaming. |
-| `STALL_WARNING_PRESSURE` | 1.0 bar | Below this, show the "STALL WARNING" label. The label alone is not lethal — see `STALL_TIMEOUT`. |
-| `STALL_TIMEOUT` | 30 s | Pressure at exactly zero for this long ends the run (`starvation`). Closes the "do nothing forever" score exploit; also a soft deadline to get the engine lit. 30s (design proposed 20) leaves a fumbling first-timer room to warm up from cold. |
+| `STEAM_MAX_RATE` | 2.5 bar/s | Rate when temperature is full and the water curve = 1.0. Explosion needs steam sustained above ~2.42 (roughly T ≥ 226 °C with a full boiler). |
+| `LEAKAGE` | 0.1 bar/s | Small constant loss — now the *only* automatic pressure bleed (the auto safety valve was removed in "Fifth pass"). |
+| `WATER_CONSUMPTION_RATE` | 1.2 | `boilerWater -= steamRate * 1.2 * dt` → ~−3 %/s at peak steam; a 12% add lasts ~4s of hard steaming. |
+| `STALL_TIMEOUT` | 30 s | Machine stopped (speed 0) for this long ends the run (`stall`). Closes the "do nothing forever" exploit; also a soft deadline to get going from cold. 30s leaves a fumbling first-timer room to warm up. |
+
+### The machine (Fifth pass)
+
+| Name | Value | Meaning / why |
+|---|---|---|
+| `RUN_THRESHOLD` | 2.0 bar | Below this the machine is stopped (speed 0, `stalledTime` accrues). |
+| `SPEED_PER_BAR` | 2.0 (m/s)/bar | `machineSpeed = (pressure − 2) × 2`. Pure score scaling — safe to retune for feel. |
+| `WORK_DRAW_COEFF` | 0.24 (bar/s)/bar | Steep pre-knee draw slope. A steam rate of ~1.6 parks pressure at ~8 bar, ~1.9 at ~9.5 bar. |
+| `MAX_WORK_DRAW` | 1.9 bar/s | The engine's efficient throughput (the "knee", at ~9.9 bar). |
+| `WORK_DRAW_COEFF_HIGH` | 0.08 (bar/s)/bar | Shallow post-knee slope. Makes 11–15 bar a *holdable* (wearing) band: steam ~2.1 → ~11 bar, ~2.25 → ~13 bar, ~2.4 → ~15 bar, ~2.5 → explodes. |
+| `REDLINE_PRESSURE` | 12 bar | Above this, `wear` accumulates. |
+| `WEAR_RATE` | 0.9 wear/s per bar over redline | Tuned so riding ~13 bar for score breaks the machine in ~60–90s, but pushing to ~14.5+ reaches explosion first. Moderate greed → breakdown; reckless greed → explosion. |
+| `WEAR_RECOVERY` | 0.6 wear/s | Shed while at/below the redline. Wear is a real resource, not a one-spike death. |
+| `WEAR_MAX` | 100 | `wear` at which the machine breaks apart (`breakdown`). |
+| `VENT_AMOUNT` | 3.0 bar | Dropped per manual "Vent steam". |
+| `VENT_COOLDOWN` | 2.0 s | Between vents. Long enough that venting is a real decision, short enough to save a spike. |
 | `MAX_PRESSURE` | 15 bar | Design range max → explosion. Danger styling above ~12. |
 
 ## First playtest findings (headless, before hand-play)
@@ -329,25 +384,70 @@ cheaper scoops; gentler shock, similar total water). Headless re-run:
 | hold ~205°C, ignore the pressure gauge | `explosion` at ~40s ✓ |
 | skilled (~185°C, ease the fire before pressure passes ~10) | `starvation` at ~141s, pressure peaked ~11 bar ✓ |
 
+### Fifth pass — the running machine (2026-09-10)
+
+Until now the "machine" was abstract: pressure was just an "are you alive"
+number with no purpose. This pass makes pressure actually *drive* something, and
+adds the two ideas the player raised — a **manual vent** and a machine that
+**breaks from sustained overpressure** (not just from a full explosion).
+
+New subsystem (see the physics pseudocode and "The machine" constants):
+
+- **`machineSpeed`** = `(pressure − RUN_THRESHOLD) × SPEED_PER_BAR`, zero below
+  the threshold.
+- **`distance`** = integral of speed. **This replaces survival time as the
+  score.** Idling a barely-alive machine now earns almost nothing; running hot
+  is rewarded.
+- The running engine **consumes pressure** (`workDraw`), steeply up to a knee
+  (`MAX_WORK_DRAW`) then shallowly past it. This is the *only* real pressure
+  sink now — the automatic safety valve is gone (`VENT_RATE` deleted). The
+  shallow post-knee slope is what makes 11–15 bar a holdable band instead of an
+  instant runaway.
+- **`wear`** builds while `pressure > REDLINE_PRESSURE` (12 bar) and recovers
+  slowly below. At `WEAR_MAX` → **breakdown**, a new death distinct from
+  explosion.
+- **Vent steam** (`V`): manual `pressure −= VENT_AMOUNT`, on a cooldown. The
+  wasted coal + water is the cost.
+- The stall death is renamed `starvation` → **`stall`** and now triggers on
+  "machine stopped (speed 0) for `STALL_TIMEOUT`s" rather than "pressure at 0".
+
+Resulting strategy spectrum (headless operators):
+
+| Operator | Outcome |
+|---|---|
+| idle | `stall` at 30s, 0 m ✓ |
+| spam coal / over-fire | `meltdown` at ~8s, ~7 m ✓ |
+| hold ~210°C, never vent | `explosion` at ~69s, ~1300 m ✓ |
+| ride ~14 bar for score, never vent | `breakdown` at ~87s, ~1700 m ✓ |
+| ride just under the 12-bar redline | survives to supply exhaustion, ~2000 m (highest — but needs precision) |
+| safe cruise ~8 bar + vent when it climbs | `stall` (out of coal) at ~154s, ~1300 m ✓ |
+
+All four deaths reachable; safe play and greedy play both viable with different
+score ceilings and risk. Numbers are first-pass — expect hand-tuning.
+
 ## Rendering decision (v1)
 Gauges are **DOM + CSS bars**, not HTML5 canvas. Rationale: easier to read line-by-line
 for a learning project, and "value mapped to a fill %" ports cleanly. Canvas dials are a
 later visual pass. (Recorded here per CLAUDE.md's "note the choice once made".)
 
 ## Win/lose framing
-There's no "win" in v1 — it's an endless-survival high-score loop, which matches your
-"try to make the machine work as long as possible" framing. A clear, readable death
-screen (cause of death + survival time) is important for the loop to feel good.
+There's no "win" in v1 — it's an endless high-score loop. Score is **distance
+travelled** (Fifth pass; was survival time). The death screen shows cause of death plus
+distance and elapsed time. A clear, readable death screen is important for the loop to
+feel good.
 
 ## Controls (v1, web/keyboard+mouse)
 - Click/tap "Add water" button (or `W` key)
 - Click/tap "Add coal" button (or `C` key)
+- Click/tap "Vent steam" button (or `V` key)
 - Gauges rendered as DOM + CSS bars (see "Rendering decision (v1)")
 
 ## Roadmap (post-v1, not built yet)
-- Gold earned per run based on survival time
-- Meta-progression: upgrade pressure tolerance band, durability, storage capacity,
-  better fuel types
+- Gold earned per run based on distance travelled
+- Meta-progression: buy better machines — wider safe pressure band, slower wear at high
+  pressure, bigger supply capacity, better fuel. (The current machine's constants —
+  `REDLINE_PRESSURE`, `WEAR_RATE`, `MAX_WORK_DRAW`, `SPEED_PER_BAR`, supply sizes —
+  become per-machine stats.)
 - Random events (e.g. sudden cold draft, coal shortage delivery)
 - Roguelike run structure (die → shop → next run)
 

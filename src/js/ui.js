@@ -4,7 +4,11 @@
 // object (see simulation.js) and pushes it onto the page; it never mutates the
 // state itself. Input handlers just forward to callbacks supplied by main.js.
 
-import { CONSTANTS, canAddWater, canAddCoal } from "./simulation.js";
+import { CONSTANTS, canAddWater, canAddCoal, canVent } from "./simulation.js";
+
+// Machine speed's display ceiling: the speed at the explosion pressure.
+const MAX_MACHINE_SPEED =
+  (CONSTANTS.MAX_PRESSURE - CONSTANTS.RUN_THRESHOLD) * CONSTANTS.SPEED_PER_BAR;
 
 // Per-gauge display config. `max` scales the bar to 0..100% width. `format`
 // turns the raw number into label text. `level` returns "ok" | "warn" |
@@ -14,9 +18,24 @@ const GAUGES = {
   pressure: {
     max: CONSTANTS.MAX_PRESSURE,
     format: (v) => `${v.toFixed(1)} bar`,
+    // warn once we're within a bar of the wear redline, danger past it.
     level: (v) => {
-      if (v >= CONSTANTS.MAX_PRESSURE * 0.86) return "danger";
-      if (v >= CONSTANTS.MAX_PRESSURE * 0.73) return "warn";
+      if (v >= CONSTANTS.REDLINE_PRESSURE) return "danger";
+      if (v >= CONSTANTS.REDLINE_PRESSURE - 1) return "warn";
+      return "ok";
+    },
+  },
+  machineSpeed: {
+    max: MAX_MACHINE_SPEED,
+    format: (v) => `${Math.round(v)} m/s`,
+    level: () => "ok", // a result gauge, not a hazard
+  },
+  wear: {
+    max: CONSTANTS.WEAR_MAX,
+    format: (v) => `${Math.round((v / CONSTANTS.WEAR_MAX) * 100)}%`,
+    level: (v) => {
+      if (v >= CONSTANTS.WEAR_MAX * 0.75) return "danger";
+      if (v >= CONSTANTS.WEAR_MAX * 0.4) return "warn";
       return "ok";
     },
   },
@@ -65,26 +84,33 @@ const GAUGES = {
 const DEATHS = {
   explosion: {
     headline: "Explosion",
-    detail: "Pressure pushed past the red line and the boiler let go.",
+    detail: "Pressure hit the top of the gauge and the boiler let go.",
   },
   meltdown: {
     headline: "Meltdown",
     detail: "Temperature pushed past the red line and the engine melted down.",
   },
-  starvation: {
+  breakdown: {
+    headline: "Breakdown",
+    detail: "You ran it too hard for too long — the machine shook itself apart.",
+  },
+  stall: {
     headline: "Stalled out",
-    detail: "The machine sat at zero pressure until it seized — out of fuel, or never lit.",
+    detail: "The machine sat still too long and seized up — out of fuel, or never got going.",
   },
 };
 
 // Cache DOM references once. `gauges[key]` holds the elements for one gauge.
 const dom = {
+  distance: document.getElementById("distance"),
   elapsed: document.getElementById("elapsed"),
   stallWarning: document.getElementById("stall-warning"),
   addWaterBtn: document.getElementById("add-water-btn"),
   addCoalBtn: document.getElementById("add-coal-btn"),
+  ventBtn: document.getElementById("vent-btn"),
   waterCooldown: document.getElementById("water-cooldown"),
   coalCooldown: document.getElementById("coal-cooldown"),
+  ventCooldown: document.getElementById("vent-cooldown"),
   deathScreen: document.getElementById("death-screen"),
   deathCause: document.getElementById("death-cause"),
   deathDetail: document.getElementById("death-detail"),
@@ -107,10 +133,12 @@ function clampPercent(n) {
   return n;
 }
 
-// Push the current state onto all six gauges.
+// Push the current state onto every gauge.
 export function renderGauges(state) {
   const values = {
     pressure: state.pressure,
+    machineSpeed: state.machineSpeed,
+    wear: state.wear,
     temperature: state.temperature,
     boilerWater: state.boilerWater,
     fire: state.fireCoal,
@@ -129,42 +157,44 @@ export function renderGauges(state) {
     els.container.classList.toggle("danger", level === "danger");
   }
 
-  // Stall warning. Low pressure on its own is not lethal, but a machine left at
-  // exactly zero pressure seizes after STALL_TIMEOUT seconds — once that timer
-  // is running, show the countdown (docs/GAME_DESIGN.md "Note on stall").
-  const stalling = !state.gameOver && state.pressure < CONSTANTS.STALL_WARNING_PRESSURE;
+  // Stall warning: the machine isn't moving (pressure below RUN_THRESHOLD). Not
+  // lethal on its own, but if it stays stopped for STALL_TIMEOUT seconds the run
+  // ends — show the countdown once that timer is running.
+  const stalling = !state.gameOver && state.machineSpeed <= 0;
   dom.stallWarning.hidden = !stalling;
   if (stalling) {
-    if (state.zeroPressureTime > 0) {
-      const secondsLeft = Math.max(0, CONSTANTS.STALL_TIMEOUT - state.zeroPressureTime);
+    if (state.stalledTime > 0) {
+      const secondsLeft = Math.max(0, CONSTANTS.STALL_TIMEOUT - state.stalledTime);
       dom.stallWarning.textContent = `STALL WARNING — ${Math.ceil(secondsLeft)}s to seize`;
     } else {
-      dom.stallWarning.textContent = "STALL WARNING — pressure very low";
+      dom.stallWarning.textContent = "STALL WARNING — machine stopped";
     }
   }
 }
 
-// Update the clock and the two action buttons (enabled state + cooldown text).
+// Update the score line and the action buttons (enabled state + cooldown text).
 export function renderHUD(state) {
+  dom.distance.textContent = Math.round(state.distance).toLocaleString();
   dom.elapsed.textContent = state.elapsedTime.toFixed(1);
 
   dom.addWaterBtn.disabled = !canAddWater(state);
   dom.addCoalBtn.disabled = !canAddCoal(state);
+  dom.ventBtn.disabled = !canVent(state);
 
   dom.waterCooldown.textContent =
     state.waterCooldown > 0 ? `${state.waterCooldown.toFixed(1)}s` : "";
   dom.coalCooldown.textContent =
     state.coalCooldown > 0 ? `${state.coalCooldown.toFixed(1)}s` : "";
+  dom.ventCooldown.textContent =
+    state.ventCooldown > 0 ? `${state.ventCooldown.toFixed(1)}s` : "";
 }
 
 export function showDeathScreen(state) {
-  const death = DEATHS[state.causeOfDeath] ?? {
-    headline: "Game over",
-    detail: "",
-  };
+  const death = DEATHS[state.causeOfDeath] ?? { headline: "Game over", detail: "" };
   dom.deathCause.textContent = death.headline;
   dom.deathDetail.textContent =
-    `${death.detail} You kept it running for ${state.elapsedTime.toFixed(1)} seconds.`.trim();
+    `${death.detail} You travelled ${Math.round(state.distance).toLocaleString()} m ` +
+    `in ${state.elapsedTime.toFixed(0)} seconds.`;
   dom.deathScreen.hidden = false;
 }
 
@@ -172,11 +202,12 @@ export function hideDeathScreen() {
   dom.deathScreen.hidden = true;
 }
 
-// Wire buttons and the W / C keys to the supplied callbacks. Called once at
+// Wire buttons and the W / C / V keys to the supplied callbacks. Called once at
 // startup by main.js.
-export function bindControls({ onAddWater, onAddCoal, onRestart }) {
+export function bindControls({ onAddWater, onAddCoal, onVent, onRestart }) {
   dom.addWaterBtn.addEventListener("click", onAddWater);
   dom.addCoalBtn.addEventListener("click", onAddCoal);
+  dom.ventBtn.addEventListener("click", onVent);
   dom.restartBtn.addEventListener("click", onRestart);
 
   window.addEventListener("keydown", (event) => {
@@ -184,5 +215,6 @@ export function bindControls({ onAddWater, onAddCoal, onRestart }) {
     const key = event.key.toLowerCase();
     if (key === "w") onAddWater();
     else if (key === "c") onAddCoal();
+    else if (key === "v") onVent();
   });
 }

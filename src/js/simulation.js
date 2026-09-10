@@ -13,12 +13,17 @@
 //     makes less steam) and peaks in a boiler-water band (a bell — too little
 //     water starves it, a flooded boiler boils poorly). The two factors
 //     multiply.
-//   - Steam raises pressure; a constant safety valve + leak bleed it back down.
-//   - Steam also consumes boiler water.
-//   - Deaths: explosion (pressure maxed), meltdown (temp maxed), starvation
-//     (the machine sits at zero pressure for STALL_TIMEOUT seconds — whether it
-//     ran its supplies dry or was simply never lit). A brief low-pressure dip is
-//     only a "stall warning", not lethal — see GAME_DESIGN.md.
+//   - Steam raises pressure. Above RUN_THRESHOLD the machine runs (speed scales
+//     with pressure) and consumes pressure as it works, up to MAX_WORK_DRAW —
+//     past that the machine is saturated and excess steam just builds pressure.
+//     A small constant leak also bleeds pressure. The player can manually vent.
+//   - `distance` (the score) is the integral of machine speed. Pressure held
+//     above REDLINE_PRESSURE accumulates `wear` (it recovers slowly below).
+//   - Steam also consumes boiler water; adding cold water mixes the boiler
+//     temperature down.
+//   - Deaths: explosion (pressure maxed), meltdown (temp maxed), breakdown
+//     (wear maxed — ran it too hard too long), stall (machine not moving for
+//     STALL_TIMEOUT seconds — ran the supplies dry, or never got it going).
 
 // All tunable numbers live here. Rationale for each value is in
 // docs/GAME_DESIGN.md "v1 tuning constants". These are placeholders: expect to
@@ -79,15 +84,39 @@ export const CONSTANTS = Object.freeze({
   WATER_STEAM_PEAK: 55, // % — centre of the steam boiler-water band (a bell)
   WATER_STEAM_WIDTH: 38, // % — width (sigma) of that band
   STEAM_MAX_RATE: 2.5, // bar/s produced when temp is full and the water curve = 1.0
-  VENT_RATE: 1.5, // bar/s bled off by the constant safety valve
-  LEAKAGE: 0.1, // bar/s bled off by background leaks
+  LEAKAGE: 0.1, // bar/s bled off by background leaks (the only *constant* bleed)
   WATER_CONSUMPTION_RATE: 1.2, // boiler-water % consumed per unit of steam rate
-  STALL_WARNING_PRESSURE: 1.0, // bar — below this, show a stall warning
-  // How long the machine may sit at zero pressure before the run ends
-  // ("starvation"). Closes the "do nothing forever" score exploit and doubles
-  // as a soft deadline to get the engine lit from a cold start.
-  STALL_TIMEOUT: 30, // seconds
   MAX_PRESSURE: 15, // bar — explosion at or above this
+
+  // --- The machine (work output) ----------------------------------------
+  // Pressure drives the engine. It doesn't move at all until RUN_THRESHOLD;
+  // above that, speed scales with pressure. The running engine also consumes
+  // pressure (WORK_DRAW_COEFF per bar above RUN_THRESHOLD) but only up to
+  // MAX_WORK_DRAW — at max throughput it can't absorb any more steam, so beyond
+  // that point extra steam just builds pressure toward explosion. This is the
+  // main pressure sink; there is no automatic safety valve (the player vents by
+  // hand). See docs/GAME_DESIGN.md "Fifth pass".
+  RUN_THRESHOLD: 2.0, // bar — below this the machine is stopped
+  SPEED_PER_BAR: 2.0, // speed (score units/s) per bar of pressure above RUN_THRESHOLD
+  WORK_DRAW_COEFF: 0.24, // bar/s of pressure consumed per bar above RUN_THRESHOLD
+  MAX_WORK_DRAW: 1.9, // bar/s — the engine's *efficient* max throughput (the "knee")
+  WORK_DRAW_COEFF_HIGH: 0.08, // shallow draw slope past the knee: the engine still
+  // absorbs a little more steam when overpressured, so 11–14 bar is a holdable
+  // (if wearing) band rather than an instant runaway to explosion
+  REDLINE_PRESSURE: 12, // bar — sustained pressure above this wears the machine
+  WEAR_RATE: 0.9, // wear/s per bar of pressure above REDLINE_PRESSURE. Tuned so
+  // riding ~13 bar for extra score breaks the machine in ~60-90s, but pushing
+  // to ~14.5+ reaches the explosion pressure faster than wear reaches WEAR_MAX —
+  // moderate greed -> breakdown, reckless greed -> explosion.
+  WEAR_RECOVERY: 0.6, // wear/s shed while pressure is at or below REDLINE_PRESSURE
+  WEAR_MAX: 100, // wear at which the machine breaks apart ("breakdown")
+  VENT_AMOUNT: 3.0, // bar released per manual vent
+  VENT_COOLDOWN: 2.0, // seconds before "Vent" is allowed again
+
+  // How long the machine may sit stopped (speed 0) before the run ends
+  // ("stall"). Closes the "do nothing forever" score exploit and doubles as a
+  // soft deadline to get the engine going from a cold start.
+  STALL_TIMEOUT: 30, // seconds
 });
 
 // Keep a numeric value inside [min, max].
@@ -138,12 +167,16 @@ export function createInitialState() {
     temperature: c.START_TEMPERATURE,
     pressure: c.START_PRESSURE,
     fireCoal: c.START_FIRE_COAL,
+    machineSpeed: 0, // current engine speed (0 until pressure > RUN_THRESHOLD)
+    distance: 0, // integral of machineSpeed over time — this is the score
+    wear: 0, // 0..WEAR_MAX; climbs above REDLINE_PRESSURE, recovers below it
     elapsedTime: 0,
     waterCooldown: 0,
     coalCooldown: 0,
-    // How long pressure has been at zero. Drives the stall timeout (see
-    // STALL_TIMEOUT); reset the moment pressure goes positive.
-    zeroPressureTime: 0,
+    ventCooldown: 0,
+    // How long the machine has been stopped (speed 0). Drives the stall
+    // timeout (see STALL_TIMEOUT); resets the moment the machine moves again.
+    stalledTime: 0,
     gameOver: false,
     causeOfDeath: null,
   };
@@ -157,6 +190,11 @@ export function canAddWater(state) {
 // Is the "Add Coal" action currently available?
 export function canAddCoal(state) {
   return !state.gameOver && state.coalCooldown <= 0 && state.coalSupply > 0;
+}
+
+// Is the "Vent" action currently available?
+export function canVent(state) {
+  return !state.gameOver && state.ventCooldown <= 0 && state.pressure > 0;
 }
 
 // Move water from the tank into the boiler and start the cooldown. If the tank
@@ -200,6 +238,16 @@ export function addCoal(state) {
   state.coalCooldown = c.COAL_COOLDOWN;
 }
 
+// Manually crack the valve and let steam off: drop the pressure by a fixed
+// chunk and start the cooldown. The wasted steam (the coal and water that went
+// into it) is the only cost. Mutates `state`.
+export function ventSteam(state) {
+  if (!canVent(state)) return;
+  const c = CONSTANTS;
+  state.pressure = Math.max(0, state.pressure - c.VENT_AMOUNT);
+  state.ventCooldown = c.VENT_COOLDOWN;
+}
+
 // Advance the simulation by `dt` seconds. Mutates and returns `state`.
 // Order of operations follows docs/GAME_DESIGN.md "Physics model".
 export function step(state, dt) {
@@ -209,6 +257,7 @@ export function step(state, dt) {
   // Cooldown timers tick toward zero (= ready).
   state.waterCooldown = Math.max(0, state.waterCooldown - dt);
   state.coalCooldown = Math.max(0, state.coalCooldown - dt);
+  state.ventCooldown = Math.max(0, state.ventCooldown - dt);
 
   // The fire consumes itself, so heat is not a one-shot jump per stoke.
   state.fireCoal = Math.max(0, state.fireCoal - c.FIRE_BURN_DOWN * dt);
@@ -238,8 +287,19 @@ export function step(state, dt) {
     steamCurve(state.temperature) *
     waterAvailabilityCurve(state.boilerWater);
 
-  // Steam raises pressure; the safety valve and leaks bleed it back down.
-  state.pressure += (steamRate - c.VENT_RATE - c.LEAKAGE) * dt;
+  // Pressure: steam in, minus the constant leak, minus the work the running
+  // engine does. The engine's draw grows steeply with pressure up to its
+  // efficient throughput (MAX_WORK_DRAW, the "knee"), then keeps rising on a
+  // much shallower slope — so an overpressured boiler can be held in the
+  // redline band for a while (wearing the machine) instead of instantly
+  // running away to explosion.
+  const overRun = Math.max(0, state.pressure - c.RUN_THRESHOLD);
+  const kneeOverRun = c.MAX_WORK_DRAW / c.WORK_DRAW_COEFF;
+  const workDraw =
+    overRun <= kneeOverRun
+      ? overRun * c.WORK_DRAW_COEFF
+      : c.MAX_WORK_DRAW + (overRun - kneeOverRun) * c.WORK_DRAW_COEFF_HIGH;
+  state.pressure += (steamRate - c.LEAKAGE - workDraw) * dt;
   state.pressure = clamp(state.pressure, 0, c.MAX_PRESSURE);
 
   // Producing steam draws down the water in the boiler.
@@ -249,12 +309,26 @@ export function step(state, dt) {
     100,
   );
 
-  // Track how long the machine has been dead (no pressure at all). Any positive
-  // pressure resets it.
-  if (state.pressure <= 0) {
-    state.zeroPressureTime += dt;
+  // Machine speed follows pressure above the run threshold; distance (the
+  // score) is its integral.
+  state.machineSpeed =
+    state.pressure > c.RUN_THRESHOLD
+      ? (state.pressure - c.RUN_THRESHOLD) * c.SPEED_PER_BAR
+      : 0;
+  state.distance += state.machineSpeed * dt;
+
+  // Wear builds while pressure is over the redline and recovers slowly below.
+  if (state.pressure > c.REDLINE_PRESSURE) {
+    state.wear += (state.pressure - c.REDLINE_PRESSURE) * c.WEAR_RATE * dt;
   } else {
-    state.zeroPressureTime = 0;
+    state.wear = Math.max(0, state.wear - c.WEAR_RECOVERY * dt);
+  }
+
+  // Track how long the machine has been stopped. Any movement resets it.
+  if (state.machineSpeed <= 0) {
+    state.stalledTime += dt;
+  } else {
+    state.stalledTime = 0;
   }
 
   state.elapsedTime += dt;
@@ -267,11 +341,16 @@ export function step(state, dt) {
   } else if (state.temperature >= c.MAX_TEMP) {
     state.gameOver = true;
     state.causeOfDeath = "meltdown";
-  } else if (state.zeroPressureTime >= c.STALL_TIMEOUT) {
-    // The machine sat at zero pressure too long: never got lit, or ran its
-    // supplies dry and coasted to a stop. Either way the run is over.
+  } else if (state.wear >= c.WEAR_MAX) {
+    // Ran it too hard for too long — the machine shakes itself apart even
+    // though pressure never reached the explosion point.
     state.gameOver = true;
-    state.causeOfDeath = "starvation";
+    state.causeOfDeath = "breakdown";
+  } else if (state.stalledTime >= c.STALL_TIMEOUT) {
+    // The machine sat stopped too long: never got going, or ran its supplies
+    // dry and coasted to a halt.
+    state.gameOver = true;
+    state.causeOfDeath = "stall";
   }
 
   return state;

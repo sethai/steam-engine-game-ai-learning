@@ -10,7 +10,10 @@
     <main class="panel">
       <header class="panel-header">
         <h1>Steam Engine Survival</h1>
-        <p class="clock">Survived: <span id="elapsed">0.0</span>s</p>
+        <p class="clock">
+          <span class="distance"><span id="distance">0</span> m</span>
+          <span class="elapsed"><span id="elapsed">0.0</span>s</span>
+        </p>
       </header>
 
       <!-- Gauges. ui.js fills in the value text, the bar width, and danger
@@ -22,7 +25,23 @@
             <span class="gauge-value">0.0 bar</span>
           </div>
           <div class="gauge-track"><div class="gauge-fill"></div></div>
-          <p class="stall-warning" id="stall-warning" hidden>STALL WARNING — pressure very low</p>
+          <p class="stall-warning" id="stall-warning" hidden>STALL WARNING — machine stopped</p>
+        </div>
+
+        <div class="gauge" id="gauge-machineSpeed">
+          <div class="gauge-label">
+            <span class="gauge-name">Machine speed</span>
+            <span class="gauge-value">0 m/s</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
+        </div>
+
+        <div class="gauge" id="gauge-wear">
+          <div class="gauge-label">
+            <span class="gauge-name">Wear</span>
+            <span class="gauge-value">0%</span>
+          </div>
+          <div class="gauge-track"><div class="gauge-fill"></div></div>
         </div>
 
         <div class="gauge" id="gauge-temperature">
@@ -73,11 +92,17 @@
         <button type="button" id="add-coal-btn">
           Add coal <kbd>C</kbd> <span class="cooldown" id="coal-cooldown"></span>
         </button>
+        <button type="button" id="vent-btn">
+          Vent steam <kbd>V</kbd> <span class="cooldown" id="vent-cooldown"></span>
+        </button>
       </section>
 
       <p class="hint">
-        Keep the machine alive. Pressure past the top explodes; temperature past
-        the top melts down; running out of both supplies stalls you out.
+        The machine runs on pressure and the score is distance travelled, so
+        run it hot. But pressure past the red line wears the machine out
+        (breakdown), and right at the top the boiler explodes. Vent steam to
+        shed pressure fast. Temperature past the top melts it down; let the
+        machine stop for too long and it stalls.
       </p>
     </main>
 

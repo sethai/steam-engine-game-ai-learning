@@ -64,11 +64,19 @@ body {
   margin: 0;
   font-variant-numeric: tabular-nums;
   color: var(--ink-dim);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
 }
 
-.clock #elapsed {
+.clock .distance {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.clock .elapsed {
+  font-size: 0.85rem;
 }
 
 /* --- Gauges --------------------------------------------------------------- */
@@ -139,14 +147,15 @@ body {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin: 20px 0 12px;
 }
 
 .controls button {
-  flex: 1;
+  flex: 1 1 120px;
   padding: 12px 10px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
   background: #3c372f;

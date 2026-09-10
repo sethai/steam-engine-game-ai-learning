@@ -9,6 +9,7 @@ import {
   step,
   addWater,
   addCoal,
+  ventSteam,
 } from "./simulation.js";
 import {
   renderGauges,
@@ -68,6 +69,7 @@ function frame(now) {
 bindControls({
   onAddWater: () => addWater(state),
   onAddCoal: () => addCoal(state),
+  onVent: () => ventSteam(state),
   onRestart: startRun,
 });
 
