@@ -10,18 +10,6 @@ import { CONSTANTS, canAddWater, canAddCoal, canVent } from "./simulation.js";
 const MAX_MACHINE_SPEED =
   (CONSTANTS.MAX_PRESSURE - CONSTANTS.RUN_THRESHOLD) * CONSTANTS.SPEED_PER_BAR;
 
-// Pressure at the machine's efficient-throughput "knee" (see WORK_DRAW in
-// simulation.js). Below it the engine absorbs steam efficiently; above it extra
-// pressure buys little speed and drains supplies faster.
-const KNEE_PRESSURE =
-  CONSTANTS.RUN_THRESHOLD + CONSTANTS.MAX_WORK_DRAW / CONSTANTS.WORK_DRAW_COEFF;
-
-// Display-only: below this pressure the machine turns over but barely adds
-// speed (the low "warn" band on the dial). Not a physics constant.
-const PRESSURE_EFFECTIVE = 6;
-
-const speedAt = (bar) => (bar - CONSTANTS.RUN_THRESHOLD) * CONSTANTS.SPEED_PER_BAR;
-
 // --- Analog arc dials (pressure, machine speed) -------------------------------
 // Geometry of the dial SVG (viewBox 0 0 120 100). The arc sweeps SWEEP degrees
 // starting at START (clockwise, SVG y-down): bottom-left -> top -> bottom-right.
@@ -35,11 +23,11 @@ const DIALS = {
     unit: "bar",
     format: (v) => v.toFixed(1),
     zones: [
-      { to: CONSTANTS.RUN_THRESHOLD, level: "danger" }, // stopped — stall risk
-      { to: PRESSURE_EFFECTIVE, level: "warn" }, //          moving but weak
-      { to: KNEE_PRESSURE, level: "ok" }, //                 efficient band
-      { to: CONSTANTS.REDLINE_PRESSURE, level: "warn" }, //  thirsty, past the knee
-      { to: CONSTANTS.MAX_PRESSURE, level: "danger" }, //    wearing / about to blow
+      { to: CONSTANTS.RUN_THRESHOLD, level: "danger" }, //   stopped — stall risk
+      { to: CONSTANTS.PRESSURE_SAFE_LOW, level: "warn" }, //  moving but weak
+      { to: CONSTANTS.PRESSURE_SAFE_HIGH, level: "ok" }, //   efficient band
+      { to: CONSTANTS.REDLINE_PRESSURE, level: "warn" }, //   thirsty, past the knee
+      { to: CONSTANTS.MAX_PRESSURE, level: "danger" }, //     wearing / about to blow
     ],
   },
   machineSpeed: {
@@ -47,9 +35,9 @@ const DIALS = {
     unit: "m/s",
     format: (v) => `${Math.round(v)}`,
     zones: [
-      { to: speedAt(KNEE_PRESSURE), level: "ok" }, //        safe working speed
-      { to: speedAt(CONSTANTS.REDLINE_PRESSURE), level: "warn" }, // getting fast
-      { to: MAX_MACHINE_SPEED, level: "danger" }, //         too fast — will break
+      { to: CONSTANTS.SPEED_SAFE_MAX, level: "ok" }, //       safe working speed
+      { to: CONSTANTS.SPEED_WARN_MAX, level: "warn" }, //     getting fast
+      { to: MAX_MACHINE_SPEED, level: "danger" }, //          too fast — will break
     ],
   },
 };

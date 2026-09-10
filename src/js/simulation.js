@@ -99,6 +99,18 @@ export const CONSTANTS = Object.freeze({
   // hand). See docs/GAME_DESIGN.md "Fifth pass".
   RUN_THRESHOLD: 2.0, // bar — below this the machine is stopped
   SPEED_PER_BAR: 2.0, // speed (score units/s) per bar of pressure above RUN_THRESHOLD
+
+  // Operating-zone boundaries. Used by the dials now, and by a future
+  // speed-based wear mechanic. These are per-machine stats: a better machine
+  // has a wider green band and a higher safe speed. Defaults track the pressure
+  // model — PRESSURE_SAFE_HIGH ≈ the work-draw knee
+  // (RUN_THRESHOLD + MAX_WORK_DRAW / WORK_DRAW_COEFF ≈ 9.9), and the speed
+  // bounds are the speeds at PRESSURE_SAFE_HIGH and REDLINE_PRESSURE.
+  PRESSURE_SAFE_LOW: 6, // bar — below this the engine runs but barely adds speed
+  PRESSURE_SAFE_HIGH: 10, // bar — top of the efficient band (the work-draw knee)
+  SPEED_SAFE_MAX: 16, // m/s — top of the green band on the speed dial
+  SPEED_WARN_MAX: 20, // m/s — top of the orange band; above here the machine will break
+
   WORK_DRAW_COEFF: 0.24, // bar/s of pressure consumed per bar above RUN_THRESHOLD
   MAX_WORK_DRAW: 1.9, // bar/s — the engine's *efficient* max throughput (the "knee")
   WORK_DRAW_COEFF_HIGH: 0.08, // shallow draw slope past the knee: the engine still

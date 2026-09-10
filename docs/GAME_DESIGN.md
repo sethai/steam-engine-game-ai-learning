@@ -225,6 +225,8 @@ when the player stokes and burns down over time; heat scales with it.
 |---|---|---|
 | `RUN_THRESHOLD` | 2.0 bar | Below this the machine is stopped (speed 0, `stalledTime` accrues). |
 | `SPEED_PER_BAR` | 2.0 (m/s)/bar | `machineSpeed = (pressure − 2) × 2`. Pure score scaling — safe to retune for feel. |
+| `PRESSURE_SAFE_LOW` / `PRESSURE_SAFE_HIGH` | 6 / 10 bar | Green band on the pressure dial — the efficient operating range. Explicit (not derived) so a future machine can widen the band. Default `_HIGH` ≈ the work-draw knee. |
+| `SPEED_SAFE_MAX` / `SPEED_WARN_MAX` | 16 / 20 m/s | Green→orange and orange→red on the speed dial. Explicit per-machine stats; a future speed-based wear mechanic will use them too. Defaults are the speeds at `PRESSURE_SAFE_HIGH` / `REDLINE_PRESSURE`. |
 | `WORK_DRAW_COEFF` | 0.24 (bar/s)/bar | Steep pre-knee draw slope. A steam rate of ~1.6 parks pressure at ~8 bar, ~1.9 at ~9.5 bar. |
 | `MAX_WORK_DRAW` | 1.9 bar/s | The engine's efficient throughput (the "knee", at ~9.9 bar). |
 | `WORK_DRAW_COEFF_HIGH` | 0.08 (bar/s)/bar | Shallow post-knee slope. Makes 11–15 bar a *holdable* (wearing) band: steam ~2.1 → ~11 bar, ~2.25 → ~13 bar, ~2.4 → ~15 bar, ~2.5 → explodes. |
@@ -437,9 +439,10 @@ fill %" ports cleanly. **Pressure and machine speed** are **inline-SVG analog ar
 (built by `ui.js` from the physics constants, needle rotated per frame) — still
 declarative DOM, no canvas. Zones: pressure red/orange/**green**/orange/red (both ends
 bad — stall vs. wear/explosion); speed green/orange/red (only the fast end is bad). The
-green edges are the machine's efficient "knee" (`MAX_WORK_DRAW / WORK_DRAW_COEFF`) and
-`REDLINE_PRESSURE`, so the colours track the model. (Recorded per CLAUDE.md's "note the
-choice once made".)
+zone edges are explicit constants — `PRESSURE_SAFE_LOW/HIGH`, `SPEED_SAFE_MAX`,
+`SPEED_WARN_MAX` (plus the existing `RUN_THRESHOLD` / `REDLINE_PRESSURE` / `MAX_*`) — so a
+future machine upgrade can widen the safe band. Defaults track the pressure model.
+(Recorded per CLAUDE.md's "note the choice once made".)
 
 ## Win/lose framing
 There's no "win" in v1 — it's an endless high-score loop. Score is **distance
