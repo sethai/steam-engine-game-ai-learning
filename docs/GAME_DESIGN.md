@@ -450,12 +450,29 @@ console: `ui.js` spins the flywheel (angle = `distance × DEG_PER_M`, so it spee
 stops with the machine), swings a connecting rod off the crank pin, and fades chimney
 smoke + firebox glow with a `--fire` custom property set from `fireCoal`.
 
-**Temperature is a thermometer**, not a bar (plain HTML/CSS — a rounded tube + bulb, no
-SVG needed). Its background is a gradient built once from `TEMP_SAFE_LOW/HIGH` and
-`TEMP_MELTDOWN_WARN`, so the *whole* scale's zones are always visible; the mercury (fill
-+ bulb colour) just rises to mark the current reading, recoloured by whichever zone it's
-in. This calls out the two ranges that actually matter — the best-steam band and the
-meltdown-risk band — without needing to read a number.
+**Temperature is a thermometer**, not a bar — one inline SVG (tube rect + bulb circle).
+The tube and bulb are solid same-coloured fills that deeply overlap rather than two
+separately-bordered shapes, which is what makes the join seamless: overlapping fills of
+one colour never show a border line, but two independent borders (an earlier version of
+this, in plain CSS boxes) can't be made to line up at every size. The tube's interior is
+a gradient built once from `TEMP_SAFE_LOW/HIGH` and `TEMP_MELTDOWN_WARN`, so the *whole*
+scale's zones are always visible; a narrow red mercury bar (capped with a horizontal bar
+for an easy-to-spot reading) rises inside to mark the current value without occluding the
+zones behind it. This calls out the two ranges that actually matter — the best-steam band
+and the meltdown-risk band — without needing to read a number.
+
+**Boiler water and fire are also inline SVGs**, not bars, replacing two more bar gauges:
+
+- A **boiler tank**: same layered-solid-fill trick as the thermometer for the brass
+  outline. The water surface is an animated wavy path (two layers scrolling at different
+  speeds/directions via a CSS `translateX` loop, built by repeating one wave segment
+  twice so it tiles seamlessly), vertically positioned each frame from `boilerWater`.
+- A **furnace**: a dark arch cut into a brass-trimmed body, with three layered flame
+  shapes (outer/mid/inner, red/amber/yellow) sitting on the arch floor. The whole flame
+  cluster is scaled from `fireCoal` (anchored at the arch floor so it grows upward, same
+  0..1 fraction of `FIRE_FULL` as the engine illustration's firebox glow, so the two
+  agree on what "full fire" looks like), and each flame flickers independently via a
+  small looping CSS `scale` animation — same staggered-loop idea as the chimney smoke.
 
 Everything here is still declarative DOM, no canvas. (Recorded per CLAUDE.md's "note the
 choice once made".)
@@ -470,7 +487,8 @@ feel good.
 - Click/tap "Add water" button (or `W` key)
 - Click/tap "Add coal" button (or `C` key)
 - Click/tap "Vent steam" button (or `V` key)
-- Gauges rendered as DOM + CSS bars (see "Rendering decision (v1)")
+- Gauges rendered as DOM + CSS bars, dials, thermometer, boiler and furnace (see
+  "Rendering decision (v1)")
 
 ## Roadmap (post-v1, not built yet)
 - Gold earned per run based on distance travelled

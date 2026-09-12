@@ -189,6 +189,154 @@ function buildThermoSvg(config) {
   </svg>`;
 }
 
+// --- Boiler water tank --------------------------------------------------------
+// Geometry for the tank SVG (viewBox 0 0 120 70). Same layered-fill trick as
+// the thermometer: one brass outer rect is the whole visible border, with a
+// smaller same-shape "empty tank" rect on top of it, so there's no separate
+// stroke to misalign.
+const BOILER_SVG = {
+  W: 120,
+  H: 70,
+  OUTER: { x: 4, y: 6, w: 112, h: 58, rx: 27 },
+  BORDER: 4,
+};
+
+// Builds a two-period-repeating wavy-top path, `innerWidth` wide, doubled to
+// `2 * innerWidth` (two identical halves back to back) so that scrolling it
+// by exactly `-innerWidth` loops seamlessly forever. `baseline` is the
+// resting water-surface height in the path's own local coordinates (0 lines
+// the crest up with wherever the enclosing group is translated to); `bottom`
+// just needs to reach past anything the tank clip could ever show.
+function buildWaveSegment(xOffset, width, amplitude, baseline, periods) {
+  const half = width / (periods * 2);
+  let d = "";
+  let x = xOffset;
+  let up = true;
+  for (let i = 0; i < periods * 2; i++) {
+    const cx = x + half / 2;
+    const nx = x + half;
+    const y = up ? baseline - amplitude : baseline + amplitude;
+    d += ` Q${cx.toFixed(1)},${y.toFixed(1)} ${nx.toFixed(1)},${baseline.toFixed(1)}`;
+    x = nx;
+    up = !up;
+  }
+  return d;
+}
+
+function buildWavePath(innerWidth, amplitude, baseline, bottom, periods) {
+  const seg1 = buildWaveSegment(0, innerWidth, amplitude, baseline, periods);
+  const seg2 = buildWaveSegment(innerWidth, innerWidth, amplitude, baseline, periods);
+  const totalWidth = innerWidth * 2;
+  return `M0,${baseline.toFixed(1)}${seg1}${seg2} L${totalWidth},${bottom} L0,${bottom} Z`;
+}
+
+function buildBoilerSvg() {
+  const o = BOILER_SVG.OUTER;
+  const b = BOILER_SVG.BORDER;
+  const innerX = o.x + b;
+  const innerY = o.y + b;
+  const innerW = o.w - b * 2;
+  const innerH = o.h - b * 2;
+  const innerRx = o.rx - b;
+
+  const backWave = buildWavePath(innerW, 2.5, 0, 80, 3);
+  const frontWave = buildWavePath(innerW, 1.8, 0, 80, 4);
+
+  return `<svg viewBox="0 0 ${BOILER_SVG.W} ${BOILER_SVG.H}" class="boiler-face" role="img">
+    <defs>
+      <clipPath id="boiler-clip">
+        <rect x="${innerX}" y="${innerY}" width="${innerW}" height="${innerH}" rx="${innerRx}" />
+      </clipPath>
+    </defs>
+
+    <!-- outer brass silhouette -->
+    <rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" rx="${o.rx}" fill="var(--brass)" />
+    <!-- empty-tank cavity, shows through above the waterline -->
+    <rect x="${innerX}" y="${innerY}" width="${innerW}" height="${innerH}" rx="${innerRx}" fill="var(--track)" />
+
+    <g clip-path="url(#boiler-clip)">
+      <g class="boiler-water-y">
+        <g class="boiler-wave-scroll back">
+          <path d="${backWave}" fill="var(--water)" transform="translate(${innerX},0)" />
+        </g>
+        <g class="boiler-wave-scroll front">
+          <path d="${frontWave}" fill="var(--water-light)" opacity="0.55" transform="translate(${innerX},0)" />
+        </g>
+      </g>
+    </g>
+  </svg>`;
+}
+
+// --- Furnace (fire) -----------------------------------------------------------
+// Geometry for the furnace SVG (viewBox 0 0 120 90): a brass-trimmed body
+// with a dark arch cut into it, three layered flame shapes sitting on the
+// arch floor.
+const FURNACE_SVG = {
+  W: 120,
+  H: 90,
+  BODY: { x: 6, y: 16, w: 108, h: 64, rx: 14 },
+  ARCH_X: 34,
+  ARCH_W: 52,
+  ARCH_TOP: 32,
+  ARCH_R: 18,
+  FLAME_BASE_Y: 74,
+  FLAME_MAX_H: 42,
+};
+
+// A simple pointed flame silhouette: base at local (0,0), tip at (0,-h).
+function flamePath(w, h) {
+  const hw = w / 2;
+  return (
+    `M0,0 C${(-hw).toFixed(1)},${(-h * 0.35).toFixed(1)} ${(-hw * 0.6).toFixed(1)},${(-h * 0.8).toFixed(1)} 0,${(-h).toFixed(1)} ` +
+    `C${(hw * 0.6).toFixed(1)},${(-h * 0.8).toFixed(1)} ${hw.toFixed(1)},${(-h * 0.35).toFixed(1)} 0,0 Z`
+  );
+}
+
+function buildFurnaceSvg() {
+  const f = FURNACE_SVG;
+  const archBottom = f.FLAME_BASE_Y;
+  const archLeft = f.ARCH_X;
+  const archRight = f.ARCH_X + f.ARCH_W;
+  const archTop = f.ARCH_TOP;
+  const r = f.ARCH_R;
+  const archPathD =
+    `M${archLeft},${archBottom} L${archLeft},${(archTop + r).toFixed(1)} ` +
+    `Q${archLeft},${archTop} ${(archLeft + r).toFixed(1)},${archTop} ` +
+    `L${(archRight - r).toFixed(1)},${archTop} ` +
+    `Q${archRight},${archTop} ${archRight},${(archTop + r).toFixed(1)} ` +
+    `L${archRight},${archBottom} Z`;
+
+  const cx = archLeft + f.ARCH_W / 2;
+  const outer = flamePath(32, f.FLAME_MAX_H);
+  const mid = flamePath(20, f.FLAME_MAX_H * 0.8);
+  const inner = flamePath(11, f.FLAME_MAX_H * 0.52);
+
+  return `<svg viewBox="0 0 ${f.W} ${f.H}" class="furnace-face" role="img">
+    <defs>
+      <clipPath id="furnace-arch-clip"><path d="${archPathD}" /></clipPath>
+    </defs>
+
+    <rect x="${f.BODY.x}" y="${f.BODY.y}" width="${f.BODY.w}" height="${f.BODY.h}" rx="${f.BODY.rx}" fill="var(--furnace)" />
+    <rect x="${f.BODY.x + 14}" y="${f.BODY.y - 6}" width="${f.BODY.w - 28}" height="10" rx="4" fill="var(--furnace)" />
+    <path d="${archPathD}" fill="var(--track)" />
+    <rect x="${(cx - f.ARCH_W / 2 + 8).toFixed(1)}" y="${(archBottom - 6).toFixed(1)}" width="${f.ARCH_W - 16}" height="8" rx="3" fill="var(--brass)" opacity="0.85" />
+
+    <g clip-path="url(#furnace-arch-clip)">
+      <g class="furnace-flames">
+        <g class="flame flame-outer" transform="translate(${cx.toFixed(1)}, ${archBottom})">
+          <g class="flame-flicker"><path d="${outer}" fill="var(--danger)" /></g>
+        </g>
+        <g class="flame flame-mid" transform="translate(${(cx - 3).toFixed(1)}, ${archBottom})">
+          <g class="flame-flicker"><path d="${mid}" fill="var(--warn)" /></g>
+        </g>
+        <g class="flame flame-inner" transform="translate(${(cx + 2).toFixed(1)}, ${archBottom})">
+          <g class="flame-flicker"><path d="${inner}" fill="var(--flame-core)" /></g>
+        </g>
+      </g>
+    </g>
+  </svg>`;
+}
+
 // --- Bar gauges (everything else) -------------------------------------------
 const GAUGES = {
   wear: {
@@ -297,9 +445,21 @@ for (const key of Object.keys(GAUGES)) {
   const container = document.getElementById(`gauge-${key}`);
   dom.gauges[key] = {
     container,
-    fill: container.querySelector(".gauge-fill"),
-    value: container.querySelector(".gauge-value"),
+    fill: container.querySelector(".gauge-fill"), // null for boilerWater/fire — they render as SVGs instead
+    value: container.querySelector(".gauge-value"), // also null for fire — the flame itself is the readout
   };
+}
+
+{
+  const host = document.querySelector("#gauge-boilerWater .boiler-svg");
+  host.innerHTML = buildBoilerSvg();
+  dom.boilerWaterY = host.querySelector(".boiler-water-y");
+}
+
+{
+  const host = document.querySelector("#gauge-fire .furnace-svg");
+  host.innerHTML = buildFurnaceSvg();
+  dom.furnaceFlames = host.querySelector(".furnace-flames");
 }
 
 function clampPercent(n) {
@@ -337,14 +497,20 @@ export function renderGauges(state) {
   for (const [key, config] of Object.entries(GAUGES)) {
     const raw = barValues[key];
     const els = dom.gauges[key];
-    els.fill.style.width = `${clampPercent((raw / config.max) * 100)}%`;
-    els.value.textContent = config.format(raw);
+    if (els.fill) {
+      els.fill.style.width = `${clampPercent((raw / config.max) * 100)}%`;
+    }
+    if (els.value) {
+      els.value.textContent = config.format(raw);
+    }
 
     const level = config.level(raw);
     els.container.classList.toggle("warn", level === "warn");
     els.container.classList.toggle("danger", level === "danger");
   }
 
+  renderBoiler(state.boilerWater);
+  renderFurnace(state.fireCoal);
   renderEngine(state);
 
   // Stall warning: the machine isn't moving (pressure below RUN_THRESHOLD). Not
@@ -382,6 +548,34 @@ function renderThermometer(temperature) {
   dom.thermoReadout.textContent = `${Math.round(temperature)} °C`;
   dom.thermoReadout.classList.remove("neutral", "warn", "danger");
   if (level !== "ok") dom.thermoReadout.classList.add(level);
+}
+
+// Move the whole wave assembly (both scrolling wave layers) up/down to track
+// the current water level; the waves' own horizontal scroll runs on a CSS
+// loop independent of this, so this only ever touches the Y translate.
+function renderBoiler(boilerWater) {
+  const o = BOILER_SVG.OUTER;
+  const b = BOILER_SVG.BORDER;
+  const innerTop = o.y + b;
+  const innerBottom = o.y + o.h - b;
+  const frac = Math.max(0, Math.min(1, boilerWater / 100));
+  const surfaceY = innerBottom - frac * (innerBottom - innerTop);
+  dom.boilerWaterY.setAttribute("transform", `translate(0, ${surfaceY.toFixed(1)})`);
+}
+
+// Scale the flame cluster (anchored at the arch floor, so it grows upward)
+// with the current fire, and hide it outright once the fire's out. The
+// flicker itself is a continuous CSS loop on each flame independently.
+function renderFurnace(fireCoal) {
+  const cx = FURNACE_SVG.ARCH_X + FURNACE_SVG.ARCH_W / 2;
+  const baseY = FURNACE_SVG.FLAME_BASE_Y;
+  const frac = Math.max(0, Math.min(1, fireCoal / ENGINE.FIRE_FULL));
+  const scale = 0.22 + frac * 0.78;
+  dom.furnaceFlames.setAttribute(
+    "transform",
+    `translate(${cx.toFixed(1)},${baseY}) scale(1, ${scale.toFixed(2)}) translate(${-cx.toFixed(1)}, ${-baseY})`,
+  );
+  dom.furnaceFlames.style.opacity = fireCoal > 0 ? "1" : "0";
 }
 
 // Spin the flywheel (angle from distance travelled), swing the connecting rod
