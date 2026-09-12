@@ -119,20 +119,74 @@ const THERMO = {
   ],
 };
 
-// A background gradient for the thermometer tube showing the zones above,
-// bottom (0°C) to top (MAX_TEMP). Built once from CONSTANTS so the picture
-// never drifts out of sync with the numbers.
-function buildThermoGradient(config) {
+// Geometry for the thermometer SVG (viewBox 0 0 40 150). The tube rect and
+// bulb circle are drawn as solid, same-coloured fills that deeply overlap
+// (tube bottom sits at the bulb's centre) — that's what makes the join
+// seamless: a filled shape has no border edge to misalign, unlike two
+// separately-bordered CSS boxes.
+const T = {
+  W: 40,
+  H: 150,
+  CX: 20,
+  TUBE_Y: 3,
+  TUBE_W: 18,
+  TUBE_RX: 9,
+  BULB_CY: 128,
+  BULB_R: 19,
+  BORDER: 3,
+  MERCURY_W: 6,
+};
+
+function buildThermoSvg(config) {
+  const tubeX = T.CX - T.TUBE_W / 2;
+  const tubeHeight = T.BULB_CY - T.TUBE_Y;
+  const innerX = tubeX + T.BORDER;
+  const innerY = T.TUBE_Y + T.BORDER;
+  const innerW = T.TUBE_W - T.BORDER * 2;
+  const innerHeight = tubeHeight - T.BORDER;
+  const innerRx = T.TUBE_RX - T.BORDER;
+  const bulbInnerR = T.BULB_R - T.BORDER;
+  const mercuryX = T.CX - T.MERCURY_W / 2;
+
+  // The tube's "glass" is filled with a gradient built from the same zone
+  // list as the dials, bottom (0°C) to top (MAX_TEMP), so every zone stays
+  // visible regardless of the current reading.
   const colorOf = { neutral: "var(--neutral)", ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)" };
-  const stops = [];
   let f0 = 0;
-  for (const zone of config.zones) {
-    const f1 = zone.to / config.max;
-    const color = colorOf[zone.level];
-    stops.push(`${color} ${(f0 * 100).toFixed(1)}%`, `${color} ${(f1 * 100).toFixed(1)}%`);
-    f0 = f1;
-  }
-  return `linear-gradient(to top, ${stops.join(", ")})`;
+  const gradStops = config.zones
+    .map((z) => {
+      const f1 = z.to / config.max;
+      const stop =
+        `<stop offset="${(f0 * 100).toFixed(1)}%" stop-color="${colorOf[z.level]}" />` +
+        `<stop offset="${(f1 * 100).toFixed(1)}%" stop-color="${colorOf[z.level]}" />`;
+      f0 = f1;
+      return stop;
+    })
+    .join("");
+
+  return `<svg viewBox="0 0 ${T.W} ${T.H}" class="thermo-face" role="img">
+    <defs>
+      <linearGradient id="thermo-grad" x1="0" y1="1" x2="0" y2="0">${gradStops}</linearGradient>
+      <clipPath id="thermo-clip">
+        <rect x="${innerX}" y="${innerY}" width="${innerW}" height="${innerHeight}" rx="${innerRx}" />
+      </clipPath>
+    </defs>
+
+    <!-- outer brass silhouette: tube + bulb, one colour, deeply overlapped -->
+    <rect x="${tubeX}" y="${T.TUBE_Y}" width="${T.TUBE_W}" height="${tubeHeight}" rx="${T.TUBE_RX}" fill="var(--brass)" />
+    <circle cx="${T.CX}" cy="${T.BULB_CY}" r="${T.BULB_R}" fill="var(--brass)" />
+
+    <!-- inner cavity, same trick: the bulb is the always-full mercury reservoir -->
+    <rect x="${innerX}" y="${innerY}" width="${innerW}" height="${innerHeight}" rx="${innerRx}" fill="url(#thermo-grad)" />
+    <circle cx="${T.CX}" cy="${T.BULB_CY}" r="${bulbInnerR}" fill="var(--danger)" />
+
+    <!-- mercury: a narrow red bar rising inside the tube, capped with a
+         horizontal bar so the exact reading is easy to spot at a glance -->
+    <g clip-path="url(#thermo-clip)">
+      <rect class="thermo-mercury" x="${mercuryX}" y="${T.BULB_CY}" width="${T.MERCURY_W}" height="0" fill="var(--danger)" />
+      <rect class="thermo-cap" x="${innerX}" y="${T.BULB_CY}" width="${innerW}" height="3" fill="var(--ink)" />
+    </g>
+  </svg>`;
 }
 
 // --- Bar gauges (everything else) -------------------------------------------
@@ -217,15 +271,17 @@ const dom = {
   flywheel: document.getElementById("flywheel"),
   crankPin: document.getElementById("crank-pin"),
   connRod: document.getElementById("conn-rod"),
-  thermoTube: document.getElementById("thermo-tube"),
-  thermoFill: document.getElementById("thermo-fill"),
-  thermoBulb: document.getElementById("thermo-bulb"),
   thermoReadout: document.getElementById("thermo-readout"),
   dials: {},
   gauges: {},
 };
 
-dom.thermoTube.style.background = buildThermoGradient(THERMO);
+{
+  const host = document.querySelector("#thermo-temperature .thermo-svg");
+  host.innerHTML = buildThermoSvg(THERMO);
+  dom.thermoMercury = host.querySelector(".thermo-mercury");
+  dom.thermoCap = host.querySelector(".thermo-cap");
+}
 
 for (const [key, config] of Object.entries(DIALS)) {
   const host = document.querySelector(`#dial-${key} .dial-svg`);
@@ -306,19 +362,26 @@ export function renderGauges(state) {
   }
 }
 
-// Rise the mercury to the current temperature and colour it (fill, bulb, and
-// the number readout) by which zone it's in. The tube's background gradient
-// (set once at init) shows all the zones regardless of current temperature —
-// the mercury just marks where on that scale things stand.
+// Rise the mercury to the current temperature. The tube's background
+// gradient (baked into the SVG at init) shows all the zones regardless of
+// current temperature; the mercury (always red, like real mercury) just
+// marks where on that scale things stand. Only the number readout recolours
+// by zone.
 function renderThermometer(temperature) {
   const frac = Math.max(0, Math.min(1, temperature / THERMO.max));
   const level = levelOf(THERMO, temperature);
-  dom.thermoFill.style.height = `${(frac * 100).toFixed(1)}%`;
+
+  const innerY = T.TUBE_Y + T.BORDER;
+  const maxHeight = T.BULB_CY - innerY;
+  const height = frac * maxHeight;
+  const y = T.BULB_CY - height;
+  dom.thermoMercury.setAttribute("y", y.toFixed(1));
+  dom.thermoMercury.setAttribute("height", height.toFixed(1));
+  dom.thermoCap.setAttribute("y", (y - 1.5).toFixed(1));
+
   dom.thermoReadout.textContent = `${Math.round(temperature)} °C`;
-  for (const el of [dom.thermoFill, dom.thermoBulb, dom.thermoReadout]) {
-    el.classList.remove("neutral", "warn", "danger");
-    if (level !== "ok") el.classList.add(level);
-  }
+  dom.thermoReadout.classList.remove("neutral", "warn", "danger");
+  if (level !== "ok") dom.thermoReadout.classList.add(level);
 }
 
 // Spin the flywheel (angle from distance travelled), swing the connecting rod
