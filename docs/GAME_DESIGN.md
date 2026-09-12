@@ -206,7 +206,9 @@ when the player stokes and burns down over time; heat scales with it.
 | `NORMAL_HEAT_LOSS` | 20 °C/s | Base loss the fire is tuned against. |
 | `HIGH_HEAT_LOSS` | 40 °C/s | Flooding kills steam and wastes coal. |
 | `AMBIENT_TEMP` | 20 °C | Temperature clamps to `[AMBIENT_TEMP, MAX_TEMP]` (cooling floors at room temp, not 0). |
-| `MAX_TEMP` | 300 °C | Design range max → meltdown. Danger styling above ~260. |
+| `MAX_TEMP` | 300 °C | Design range max → meltdown. |
+| `TEMP_SAFE_LOW` / `TEMP_SAFE_HIGH` | 190 / 240 °C | Thermometer's green band — steam output is already ~85%+ by 190°C (the ease-out curve). Display-only, named like the machine's dial-zone constants so a future boiler upgrade could widen the band. |
+| `TEMP_MELTDOWN_WARN` | 276 °C | Top of the thermometer's amber band; above this it's red — meltdown is imminent. |
 
 ### Steam & pressure
 
@@ -446,8 +448,17 @@ future machine upgrade can widen the safe band. Defaults track the pressure mode
 A stylized **engine illustration** (inline SVG, in `index.html`) sits to the right of the
 console: `ui.js` spins the flywheel (angle = `distance × DEG_PER_M`, so it speeds up and
 stops with the machine), swings a connecting rod off the crank pin, and fades chimney
-smoke + firebox glow with a `--fire` custom property set from `fireCoal`. Still
-declarative DOM, no canvas. (Recorded per CLAUDE.md's "note the choice once made".)
+smoke + firebox glow with a `--fire` custom property set from `fireCoal`.
+
+**Temperature is a thermometer**, not a bar (plain HTML/CSS — a rounded tube + bulb, no
+SVG needed). Its background is a gradient built once from `TEMP_SAFE_LOW/HIGH` and
+`TEMP_MELTDOWN_WARN`, so the *whole* scale's zones are always visible; the mercury (fill
++ bulb colour) just rises to mark the current reading, recoloured by whichever zone it's
+in. This calls out the two ranges that actually matter — the best-steam band and the
+meltdown-risk band — without needing to read a number.
+
+Everything here is still declarative DOM, no canvas. (Recorded per CLAUDE.md's "note the
+choice once made".)
 
 ## Win/lose framing
 There's no "win" in v1 — it's an endless high-score loop. Score is **distance

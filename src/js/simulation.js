@@ -71,6 +71,15 @@ export const CONSTANTS = Object.freeze({
   AMBIENT_TEMP: 20, // °C — temperature floor (room temp, not 0)
   MAX_TEMP: 300, // °C — meltdown at or above this
 
+  // Thermometer display zones (ui.js). Below TEMP_SAFE_LOW the boiler is still
+  // warming up and steam output is weak; TEMP_SAFE_LOW..TEMP_SAFE_HIGH is the
+  // best steam-production band (steamCurve is already ~85%+ there); above
+  // TEMP_MELTDOWN_WARN meltdown is imminent. Display-only, but named like the
+  // machine's dial zones so a future boiler upgrade could widen them.
+  TEMP_SAFE_LOW: 190, // °C
+  TEMP_SAFE_HIGH: 240, // °C
+  TEMP_MELTDOWN_WARN: 276, // °C
+
   // --- Steam & pressure ---------------------------------------------
   // Steam vs. temperature is a rising ramp, not a bell: no steam below the
   // boiling point, climbing to full by STEAM_TEMP_FULL, then held flat for any

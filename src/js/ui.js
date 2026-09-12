@@ -106,6 +106,35 @@ function levelOf(config, value) {
   return config.zones[config.zones.length - 1].level;
 }
 
+// --- Thermometer (temperature) -----------------------------------------------
+// Same zone-list shape as the dials above, plus a "neutral" level for "not yet
+// in the interesting range" (too cold to make good steam, but not dangerous).
+const THERMO = {
+  max: CONSTANTS.MAX_TEMP,
+  zones: [
+    { to: CONSTANTS.TEMP_SAFE_LOW, level: "neutral" }, //   still warming up
+    { to: CONSTANTS.TEMP_SAFE_HIGH, level: "ok" }, //       best steam production
+    { to: CONSTANTS.TEMP_MELTDOWN_WARN, level: "warn" }, // hot
+    { to: CONSTANTS.MAX_TEMP, level: "danger" }, //         meltdown imminent
+  ],
+};
+
+// A background gradient for the thermometer tube showing the zones above,
+// bottom (0°C) to top (MAX_TEMP). Built once from CONSTANTS so the picture
+// never drifts out of sync with the numbers.
+function buildThermoGradient(config) {
+  const colorOf = { neutral: "var(--neutral)", ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)" };
+  const stops = [];
+  let f0 = 0;
+  for (const zone of config.zones) {
+    const f1 = zone.to / config.max;
+    const color = colorOf[zone.level];
+    stops.push(`${color} ${(f0 * 100).toFixed(1)}%`, `${color} ${(f1 * 100).toFixed(1)}%`);
+    f0 = f1;
+  }
+  return `linear-gradient(to top, ${stops.join(", ")})`;
+}
+
 // --- Bar gauges (everything else) -------------------------------------------
 const GAUGES = {
   wear: {
@@ -114,15 +143,6 @@ const GAUGES = {
     level: (v) => {
       if (v >= CONSTANTS.WEAR_MAX * 0.75) return "danger";
       if (v >= CONSTANTS.WEAR_MAX * 0.4) return "warn";
-      return "ok";
-    },
-  },
-  temperature: {
-    max: CONSTANTS.MAX_TEMP,
-    format: (v) => `${Math.round(v)} °C`,
-    level: (v) => {
-      if (v >= CONSTANTS.MAX_TEMP * 0.92) return "danger";
-      if (v >= CONSTANTS.MAX_TEMP * 0.8) return "warn";
       return "ok";
     },
   },
@@ -197,9 +217,15 @@ const dom = {
   flywheel: document.getElementById("flywheel"),
   crankPin: document.getElementById("crank-pin"),
   connRod: document.getElementById("conn-rod"),
+  thermoTube: document.getElementById("thermo-tube"),
+  thermoFill: document.getElementById("thermo-fill"),
+  thermoBulb: document.getElementById("thermo-bulb"),
+  thermoReadout: document.getElementById("thermo-readout"),
   dials: {},
   gauges: {},
 };
+
+dom.thermoTube.style.background = buildThermoGradient(THERMO);
 
 for (const [key, config] of Object.entries(DIALS)) {
   const host = document.querySelector(`#dial-${key} .dial-svg`);
@@ -243,9 +269,10 @@ export function renderGauges(state) {
     d.num.setAttribute("class", `dial-num level-${level}`);
   }
 
+  renderThermometer(state.temperature);
+
   const barValues = {
     wear: state.wear,
-    temperature: state.temperature,
     boilerWater: state.boilerWater,
     fire: state.fireCoal,
     waterSupply: state.waterSupply,
@@ -276,6 +303,21 @@ export function renderGauges(state) {
     } else {
       dom.stallWarning.textContent = "STALL WARNING — machine stopped";
     }
+  }
+}
+
+// Rise the mercury to the current temperature and colour it (fill, bulb, and
+// the number readout) by which zone it's in. The tube's background gradient
+// (set once at init) shows all the zones regardless of current temperature —
+// the mercury just marks where on that scale things stand.
+function renderThermometer(temperature) {
+  const frac = Math.max(0, Math.min(1, temperature / THERMO.max));
+  const level = levelOf(THERMO, temperature);
+  dom.thermoFill.style.height = `${(frac * 100).toFixed(1)}%`;
+  dom.thermoReadout.textContent = `${Math.round(temperature)} °C`;
+  for (const el of [dom.thermoFill, dom.thermoBulb, dom.thermoReadout]) {
+    el.classList.remove("neutral", "warn", "danger");
+    if (level !== "ok") el.classList.add(level);
   }
 }
 

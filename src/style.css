@@ -12,6 +12,7 @@
   --ok: #6fae5f;
   --warn: #d9a441;
   --danger: #d05a3e;
+  --neutral: #6f7f8c;
   --brass: #c9a25a;
 }
 
@@ -186,6 +187,86 @@ body {
 
 .dial .stall-warning {
   margin-top: 4px;
+}
+
+/* Thermometer. A liquid-in-glass gauge instead of a bar: the tube's background
+   is a gradient (built by ui.js from TEMP_SAFE_LOW/HIGH and TEMP_MELTDOWN_WARN)
+   showing every zone at once, and the mercury simply rises to mark the current
+   reading on that scale. */
+.thermo-graphic {
+  position: relative;
+  width: 40px;
+  height: 140px;
+  margin: 0 auto 6px;
+}
+
+.thermo-tube {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: 18px;
+  height: 110px;
+  border: 3px solid var(--brass);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.thermo-fill {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0%;
+  background: var(--ok);
+  transition: height 120ms linear, background-color 200ms linear;
+}
+.thermo-fill.neutral {
+  background: var(--neutral);
+}
+.thermo-fill.warn {
+  background: var(--warn);
+}
+.thermo-fill.danger {
+  background: var(--danger);
+}
+
+.thermo-bulb {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--brass);
+  border-radius: 50%;
+  background: var(--ok);
+  transition: background-color 200ms linear;
+}
+.thermo-bulb.neutral {
+  background: var(--neutral);
+}
+.thermo-bulb.warn {
+  background: var(--warn);
+}
+.thermo-bulb.danger {
+  background: var(--danger);
+}
+
+.thermo-readout {
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ok);
+}
+.thermo-readout.neutral {
+  color: var(--neutral);
+}
+.thermo-readout.warn {
+  color: var(--warn);
+}
+.thermo-readout.danger {
+  color: var(--danger);
 }
 
 /* --- Bar gauges --------------------------------------------------------- */

@@ -17,9 +17,11 @@
         </p>
       </header>
 
-      <!-- Analog dials for the two "operating point" readouts. ui.js injects the
-           SVG (coloured zones + needle) into each .dial-svg on load, then just
-           rotates the needle each frame. -->
+      <!-- Analog dials for the "operating point" readouts, plus the
+           thermometer. ui.js injects the dial SVGs (coloured zones + needle)
+           into each .dial-svg on load and the thermometer's zone gradient
+           into #thermo-tube, then just updates the needles / mercury level
+           each frame. -->
       <section class="dials">
         <figure class="dial" id="dial-pressure">
           <div class="dial-svg"></div>
@@ -30,6 +32,16 @@
           <div class="dial-svg"></div>
           <figcaption>Machine speed</figcaption>
         </figure>
+        <figure class="dial thermo" id="thermo-temperature">
+          <div class="thermo-graphic">
+            <div class="thermo-tube" id="thermo-tube">
+              <div class="thermo-fill" id="thermo-fill"></div>
+            </div>
+            <div class="thermo-bulb" id="thermo-bulb"></div>
+          </div>
+          <div class="thermo-readout" id="thermo-readout">0 &deg;C</div>
+          <figcaption>Temperature</figcaption>
+        </figure>
       </section>
 
       <!-- Bar gauges. ui.js fills in the value text, the bar width, and danger
@@ -39,14 +51,6 @@
           <div class="gauge-label">
             <span class="gauge-name">Wear</span>
             <span class="gauge-value">0%</span>
-          </div>
-          <div class="gauge-track"><div class="gauge-fill"></div></div>
-        </div>
-
-        <div class="gauge" id="gauge-temperature">
-          <div class="gauge-label">
-            <span class="gauge-name">Temperature</span>
-            <span class="gauge-value">0 &deg;C</span>
           </div>
           <div class="gauge-track"><div class="gauge-fill"></div></div>
         </div>
